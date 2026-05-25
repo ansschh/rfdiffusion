@@ -57,6 +57,28 @@ It prints `MEASURED submit->start wait: N seconds` and writes the allocated GPU'
 - Read-only by default; the only thing that ever queues a job is `--probe` / `run_probe_and_time.sh`,
   and that job is 1 GPU for ≤5 minutes.
 
-## Next (after we know the GPU picture)
-Once we see free GPUs + wait + GPU model/VRAM, we size the real RFdiffusion2 / LigandMPNN / AF2 jobs
-(GPU count, VRAM, walltime) and write the actual experiment sbatch scripts.
+## RFdiffusion2 setup (after recon)
+
+Confirmed cluster state (recon, 2026-05-25): Apptainer `1.3.3` module, 405 TB free scratch, instant
+V100-32GB on `dgxlo`, login-node internet OK. RFD2 ships as an Apptainer container, so deps are
+containerized — no conda hell.
+
+```bash
+# On a LOGIN NODE (needs internet), in scratch, inside tmux:
+tmux new -s rfd2
+bash /resnick/scratch/atiwari2/rfdiffusion/cluster/setup_rfd2.sh   # clone + download weights/container (>30 min)
+
+# Then submit the smoke test to an instant V100:
+sbatch /resnick/scratch/atiwari2/rfdiffusion/cluster/smoke_rfd2.sbatch
+cat rfd2_smoke_*.out      # success = backbone .pdb files under pipeline_outputs/
+```
+
+Notes:
+- RFD2 generation + LigandMPNN run fine on the V100. The repo's default **Chai-1** folding step likely
+  errors on V100 (compute 7.0) — expected; we replace it with **AF2/AF3** for self-consistency. The
+  smoke test only needs the *generation* stage to succeed.
+- Everything lives in `/resnick/scratch` (home is over quota). `-B /resnick` binds scratch into the container.
+
+## Next
+Pick the validation folder (AF3 vs open-weight) — gates only the post-generation self-consistency step.
+Then build the motif compiler: validated Tier-A trajectory (`audit/subQB_curation/...`) -> RFD2 input.
