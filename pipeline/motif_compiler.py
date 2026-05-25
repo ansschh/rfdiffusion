@@ -260,6 +260,14 @@ def write_motif_pdb(core, guideposts, out_path, lig_resname="LIG", lig_chain="L"
         serial += 1
         lines.append(fmt_atom(a, serial, resname=lig_resname, chain=lig_chain,
                               resseq=1, record="HETATM"))
+    # ORI centering token (RFD2 centers the diffusion here): reactive-core centroid,
+    # i.e. on the catalytic metal/cofactor. centering.py requires this for our transform stack.
+    serial += 1
+    cx = sum(a.x for a in core) / len(core)
+    cy = sum(a.y for a in core) / len(core)
+    cz = sum(a.z for a in core) / len(core)
+    lines.append(f"HETATM{serial:>5} ORI  ORI z   1    "
+                 f"{cx:8.3f}{cy:8.3f}{cz:8.3f}  0.00  0.00      z   ORI")
     lines.append("END")
     open(out_path, "w").write("\n".join(lines) + "\n")
     return out_path

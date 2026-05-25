@@ -6,8 +6,8 @@
   "num_guideposts": 4,
   "core_atoms": [
     "IR",
-    "N21",
     "N3",
+    "N21",
     "C1",
     "C9",
     "C7",
@@ -117,8 +117,8 @@
     ],
     "selected": [
       "IR (metal IR)",
-      "N21 (N, 2.17 A, retained donor)",
       "N3 (N, 2.23 A, retained donor)",
+      "N21 (N, 2.17 A, retained donor)",
       "C1 (C, 2.12 A, Cp* ring -- rigid steric body)",
       "C9 (C, 2.13 A, Cp* ring -- rigid steric body)",
       "C7 (C, 2.14 A, Cp* ring -- rigid steric body)",
