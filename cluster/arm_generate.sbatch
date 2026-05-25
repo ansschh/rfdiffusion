@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # arm_generate.sbatch — run RFD2 on a COMPILED ArM motif (Sub-question B generation).
-# Uses run_inference.py directly (not the benchmark pipeline) on our cofactor reactive core.
-# First run with NUM_DESIGNS=1 to confirm RFD2 INGESTS the organometallic core (Ir + donors);
-# if it reaches "Flow-matching step: 1/100", ingestion worked -> scale to 100 + controls.
+# Active-site scaffolding (RFD2-native): guidepost residues + rigid cofactor ligand -> fold.
+# All motif params (contig, contig_atoms) come from the compiler's manifest.json.
+# First run NUM_DESIGNS=1 to confirm RFD2 ingests the core + builds a fold around it;
+# reaching "Flow-matching step: 1/..." proves it -> scale to 100 + controls.
 #
-#   sbatch cluster/arm_generate.sbatch 3ZP9            # 1-design ingestion test (default)
-#   NUM_DESIGNS=100 sbatch cluster/arm_generate.sbatch 3ZP9   # full run
+#   sbatch cluster/arm_generate.sbatch 3ZP9                 # 1-design test (default)
+#   NUM_DESIGNS=100 sbatch cluster/arm_generate.sbatch 3ZP9 # full run
 #SBATCH --job-name=arm_gen
 #SBATCH --partition=dgxlo
 #SBATCH --gres=gpu:1
@@ -17,7 +18,6 @@ set -uo pipefail
 
 TARGET="${1:-3ZP9}"
 NUM="${NUM_DESIGNS:-1}"
-SCAFFOLD="${SCAFFOLD_LENGTH:-160}"
 RFD2="${RFD2_DIR:-/resnick/scratch/atiwari2/RFdiffusion2}"
 REPO="${REPO_DIR:-/resnick/scratch/atiwari2/rfdiffusion}"
 SCRATCH="${SCRATCH_DIR:-/resnick/scratch/atiwari2}"
@@ -31,29 +31,32 @@ module load "$APPT_MODULE" 2>/dev/null || module load apptainer 2>/dev/null || t
 ARM="$REPO/pipeline/compiled"
 MOTIF="$ARM/$TARGET/motif.pdb"
 MANIFEST="$ARM/$TARGET/manifest.json"
-[ -f "$MOTIF" ]    || { echo "ERROR: $MOTIF missing — git pull the repo (pipeline/compiled/$TARGET/)"; exit 1; }
+[ -f "$MOTIF" ]    || { echo "ERROR: $MOTIF missing — git pull the repo"; exit 1; }
 [ -f "$MANIFEST" ] || { echo "ERROR: $MANIFEST missing"; exit 1; }
 
+# Pull the contig + contig_atoms strings the compiler emitted (verbatim; no re-derivation).
+CONTIG="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['contig'])")"
+CONTIG_ATOMS="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['contig_atoms'])")"
 CORE="$(python3 -c "import json;print(','.join(json.load(open('$MANIFEST'))['core_atoms']))")"
 OUTDIR="$SCRATCH/RFdiffusion2/arm_designs/$TARGET"
 OUTPREF="$OUTDIR/${TARGET}_cond0"
 mkdir -p "$OUTDIR"
 
-cd "$RFD2" || { echo "ERROR: $RFD2 missing — run setup_rfd2.sh"; exit 1; }
+cd "$RFD2" || { echo "ERROR: $RFD2 missing"; exit 1; }
 export PYTHONPATH="$PWD"
 SANDBOX="rf_diffusion/exec/bakerlab_rf_diffusion_aa_sandbox"
 [ -d "$SANDBOX" ] || { echo "ERROR: $SANDBOX missing — run extract_sif.sh"; exit 1; }
 
 echo "=== host $(hostname) | $(date) ==="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv
-echo "=== ArM generation: TARGET=$TARGET  NUM_DESIGNS=$NUM  SCAFFOLD=$SCAFFOLD ==="
-echo "    motif: $MOTIF"
-echo "    rigid cofactor core (ligand LIG): $CORE"
-echo "    MODE: ligand-only buried pocket  contig=['$SCAFFOLD']  rasa=0"
-echo "          (mirrors RFD2's small_molecule_binder_rasa_buried / heme entries; NO fixed"
-echo "           protein residues; whole cofactor core is the rigid ligand)."
-echo "    INGESTION CHECK: reaching 'Flow-matching step: 1/...' proves RFD2 atomized the"
-echo "    organometallic core and is building a pocket around it."
+echo "=== ArM generation: TARGET=$TARGET  NUM_DESIGNS=$NUM ==="
+echo "    motif      : $MOTIF"
+echo "    cofactor   : LIG core = $CORE"
+echo "    contig     : $CONTIG"
+echo "    contig_atoms: $CONTIG_ATOMS"
+echo "    MODE: active-site scaffolding (guideposts + rigid cofactor); contig_as_guidepost=True."
+echo "    Reaching 'Flow-matching step: 1/...' proves RFD2 ingested the organometallic core"
+echo "    and is building a fold around it."
 echo
 
 apptainer exec --nv -B /resnick --home "$RFD2HOME" \
@@ -66,10 +69,9 @@ apptainer exec --nv -B /resnick --home "$RFD2HOME" \
     inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt \
     inference.input_pdb="$MOTIF" \
     inference.ligand=LIG \
-    contigmap.contigs="['${SCAFFOLD}']" \
-    contigmap.length="${SCAFFOLD}-${SCAFFOLD}" \
-    inference.conditions.relative_sasa_v2.active=True \
-    inference.conditions.relative_sasa_v2.rasa=0 \
+    contigmap.contigs="$CONTIG" \
+    inference.contig_as_guidepost=True \
+    contigmap.contig_atoms="$CONTIG_ATOMS" \
     inference.num_designs="$NUM" inference.design_startnum=0 \
     inference.output_prefix="$OUTPREF" \
     hydra.job_logging.root.level=WARN
@@ -80,5 +82,5 @@ echo "=== outputs ==="
 ls -ltR "$OUTDIR" 2>/dev/null | head -40
 find "$OUTDIR" -name '*.pdb' 2>/dev/null | head
 echo
-echo "SUCCESS = a design .pdb under $OUTDIR (a protein backbone built around the cofactor core)."
+echo "SUCCESS = a design .pdb under $OUTDIR (protein backbone built around the cofactor core)."
 echo "That validates the motif compiler + reactive-core representation end-to-end on a real ArM."

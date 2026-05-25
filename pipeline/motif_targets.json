@@ -30,7 +30,20 @@
         "place_in_v1": false,
         "pose_source": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step"
       },
-      "design": {"scaffold_length": 160, "ligand_only_pocket": true, "num_designs_default": 100},
+      "guideposts": {
+        "rationale": "RFD2 requires >=1 protein residue in the input (make_indep builds idx_polymer from input residues; there is no ligand-only path in this build). We seed the N nearest cofactor-contacting second-sphere residues from the validated affordance map as guideposts (contig_as_guidepost=True, unindexed). This is standard RFD2 active-site scaffolding -> fresh fold, NOT pocket reconstruction; pocket-RMSD stays a diagnostic (revisions R2). num_guideposts is a tunable knob.",
+        "num_guideposts": 4,
+        "candidates": [
+          {"chain": "A", "resseq": 131, "name": "PHE", "role": "hydrophobic groove, Cp*Ir contact"},
+          {"chain": "A", "resseq": 135, "name": "VAL", "role": "hydrophobic groove"},
+          {"chain": "A", "resseq": 198, "name": "LEU", "role": "hydrophobic groove"},
+          {"chain": "A", "resseq": 202, "name": "PRO", "role": "hydrophobic groove"},
+          {"chain": "A", "resseq": 204, "name": "LEU", "role": "hydrophobic groove"},
+          {"chain": "A", "resseq": 91,  "name": "ILE", "role": "substrate-side; I91A enlarges pocket"},
+          {"chain": "A", "resseq": 170, "name": "LYS", "role": "substrate-side"}
+        ]
+      },
+      "design": {"scaffold_length": 160, "num_designs_default": 100},
       "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
       "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude"
     }
