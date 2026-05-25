@@ -1,0 +1,4 @@
+# Force LF on shell scripts so they run on the Linux HPC after being committed from Windows.
+# (CRLF line endings cause "bad interpreter: /usr/bin/env bash^M" errors on the cluster.)
+*.sh    text eol=lf
+*.sbatch text eol=lf
