@@ -23,8 +23,12 @@ echo "== SIF partition layout =="
 apptainer sif list "$SIF"
 FSID=$(apptainer sif list "$SIF" | awk -F'|' 'tolower($0) ~ /squashfs/ && $1 ~ /[0-9]/ {gsub(/[^0-9]/,"",$1); print $1; exit}')
 [ -z "${FSID:-}" ] && FSID=1
-echo "== dumping squashfs partition (descriptor $FSID) -> $SQFS =="
-apptainer sif dump "$FSID" "$SIF" > "$SQFS" || { echo "sif dump failed"; exit 1; }
+if [ -f "$SQFS" ] && [ -s "$SQFS" ]; then
+  echo "== reusing already-dumped squashfs: $SQFS =="
+else
+  echo "== dumping squashfs partition (descriptor $FSID) -> $SQFS =="
+  apptainer sif dump "$FSID" "$SIF" > "$SQFS" || { echo "sif dump failed"; exit 1; }
+fi
 ls -lh "$SQFS"
 
 extracted_ok() { [ -d "$OUT" ] && [ -n "$(ls -A "$OUT" 2>/dev/null)" ]; }
@@ -44,10 +48,11 @@ if [ ! -x "$MM/bin/micromamba" ]; then
     || { echo "micromamba download failed"; exit 1; }
 fi
 export MAMBA_ROOT_PREFIX="$SCRATCH/mamba"
+CONDA_HOME="$SCRATCH/condahome"; mkdir -p "$CONDA_HOME"   # keep conda's ~/.conda off the over-quota home
 if [ ! -x "$SCRATCH/sqenv/bin/unsquashfs" ]; then
-  "$MM/bin/micromamba" create -y -p "$SCRATCH/sqenv" -c conda-forge squashfs-tools \
-    || { echo "micromamba create failed"; exit 1; }
+  HOME="$CONDA_HOME" "$MM/bin/micromamba" create -y -p "$SCRATCH/sqenv" -c conda-forge squashfs-tools || true
 fi
+[ -x "$SCRATCH/sqenv/bin/unsquashfs" ] || { echo "could not obtain conda-forge unsquashfs"; exit 1; }
 echo "== attempt 2: conda-forge unsquashfs =="
 rm -rf "$OUT"
 "$SCRATCH/sqenv/bin/unsquashfs" -f -d "$OUT" "$SQFS" 2>&1 | tail -10
