@@ -231,19 +231,29 @@ def write_motif_pdb(core, out_path, lig_resname="LIG", chain="L"):
 
 
 def build_rfd2_command(spec, core, motif_pdb, lig_resname, out_prefix,
-                       scaffold_length, num_designs):
-    """Emit the run_inference.py invocation for ligand-conditioned pocket generation."""
+                       scaffold_length, num_designs, buried=True):
+    """Emit the run_inference.py invocation for LIGAND-ONLY buried-pocket generation.
+
+    Mirrors RFD2's shipped 'small_molecule_binder_rasa_buried' benchmark (RFD_173
+    checkpoint) and the 'heme' metallocofactor entry: a bare-number contig ['N'] means
+    'generate N residues with NO fixed protein motif'; the cofactor reactive core is the
+    rigid ligand and RFD2 builds a buried pocket around it. rasa=0 buries the cofactor
+    (right for a catalytic metal). The whole core is fixed by default (ligands are rigid),
+    so no partially_fixed_ligand is needed. NB: a ranged contig like ['N-N'] is malformed
+    here -> empty idx_polymer -> make_indep crash; the bare ['N'] is the binder form.
+    """
     core_atom_names = [a.name for a in core]
-    fixed = ",".join(core_atom_names)
-    contig = f"['{scaffold_length}-{scaffold_length}']"
+    sasa = ("inference.conditions.relative_sasa_v2.active=True "
+            "inference.conditions.relative_sasa_v2.rasa=0 ") if buried else ""
     cmd = (
         "rf_diffusion/run_inference.py --config-name=aa "
         "inference.deterministic=True "
         "inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt "
         f"inference.input_pdb={motif_pdb} "
         f"inference.ligand={lig_resname} "
-        f"contigmap.contigs={contig} "
-        f"++inference.partially_fixed_ligand=\"{{{lig_resname}:[{fixed}]}}\" "
+        f"contigmap.contigs=['{scaffold_length}'] "
+        f"contigmap.length={scaffold_length}-{scaffold_length} "
+        f"{sasa}"
         f"inference.num_designs={num_designs} inference.design_startnum=0 "
         f"inference.output_prefix={out_prefix} "
         "hydra.job_logging.root.level=WARN"
@@ -295,6 +305,9 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
         "verification": spec.get("verification"),
         "provenance": spec.get("provenance"),
         "notes": [
+            "Generation mode: LIGAND-ONLY buried pocket (contig ['N'] + rasa=0), mirroring RFD2's "
+            "small_molecule_binder_rasa_buried / heme entries. No fixed protein residues -> no pocket "
+            "reconstruction; the cofactor core is the rigid ligand.",
             "Cp* ring kept as a rigid steric body; eta5 pi-bonding NOT encoded (RFD2 has no eta5 term).",
             "Labile leg dropped; hydride synthesized (NOT crystallographic) -> active-species core.",
             "Anchor (dative-to-CA-II-Zn) treated as a diagnostic, not a fixed motif element.",

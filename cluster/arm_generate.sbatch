@@ -34,8 +34,7 @@ MANIFEST="$ARM/$TARGET/manifest.json"
 [ -f "$MOTIF" ]    || { echo "ERROR: $MOTIF missing — git pull the repo (pipeline/compiled/$TARGET/)"; exit 1; }
 [ -f "$MANIFEST" ] || { echo "ERROR: $MANIFEST missing"; exit 1; }
 
-# Deterministically pull the fixed reactive-core atom list from the manifest (no hardcoding).
-FIXED="$(python3 -c "import json;print(','.join(json.load(open('$MANIFEST'))['core_atoms']))")"
+CORE="$(python3 -c "import json;print(','.join(json.load(open('$MANIFEST'))['core_atoms']))")"
 OUTDIR="$SCRATCH/RFdiffusion2/arm_designs/$TARGET"
 OUTPREF="$OUTDIR/${TARGET}_cond0"
 mkdir -p "$OUTDIR"
@@ -49,10 +48,12 @@ echo "=== host $(hostname) | $(date) ==="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv
 echo "=== ArM generation: TARGET=$TARGET  NUM_DESIGNS=$NUM  SCAFFOLD=$SCAFFOLD ==="
 echo "    motif: $MOTIF"
-echo "    fixed reactive-core atoms (ligand LIG): $FIXED"
-echo "    INGESTION CHECK: reaching 'Flow-matching step: 1/$SCAFFOLD' proves RFD2 atomized the"
-echo "    organometallic core. If it errors before that, the metal-ligand wasn't ingested —"
-echo "    the .out will say how RFD2 wants the ligand (bonds/params/element)."
+echo "    rigid cofactor core (ligand LIG): $CORE"
+echo "    MODE: ligand-only buried pocket  contig=['$SCAFFOLD']  rasa=0"
+echo "          (mirrors RFD2's small_molecule_binder_rasa_buried / heme entries; NO fixed"
+echo "           protein residues; whole cofactor core is the rigid ligand)."
+echo "    INGESTION CHECK: reaching 'Flow-matching step: 1/...' proves RFD2 atomized the"
+echo "    organometallic core and is building a pocket around it."
 echo
 
 apptainer exec --nv -B /resnick --home "$RFD2HOME" \
@@ -65,8 +66,10 @@ apptainer exec --nv -B /resnick --home "$RFD2HOME" \
     inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt \
     inference.input_pdb="$MOTIF" \
     inference.ligand=LIG \
-    contigmap.contigs="['${SCAFFOLD}-${SCAFFOLD}']" \
-    ++inference.partially_fixed_ligand="{LIG:[$FIXED]}" \
+    contigmap.contigs="['${SCAFFOLD}']" \
+    contigmap.length="${SCAFFOLD}-${SCAFFOLD}" \
+    inference.conditions.relative_sasa_v2.active=True \
+    inference.conditions.relative_sasa_v2.rasa=0 \
     inference.num_designs="$NUM" inference.design_startnum=0 \
     inference.output_prefix="$OUTPREF" \
     hydra.job_logging.root.level=WARN
