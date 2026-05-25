@@ -1,0 +1,14 @@
+# Boltz-2 V100 smoke test: ubiquitin (76 aa) + a Zn ion.
+# Single-sequence (msa: empty) so it runs fully offline. The Zn ligand exercises the
+# metal-aware CO-FOLDING code path — the whole reason we picked Boltz-2 over AF2.
+# Success = a predicted structure, which proves metal-aware Boltz runs on the V100.
+# (Ubiquitin doesn't biologically bind Zn; we're testing that the code path executes,
+#  not binding accuracy.)
+sequences:
+  - protein:
+      id: A
+      sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+      msa: empty
+  - ligand:
+      id: B
+      ccd: ZN

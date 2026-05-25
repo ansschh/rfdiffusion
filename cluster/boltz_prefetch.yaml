@@ -1,0 +1,7 @@
+# Tiny single-sequence input used ONLY to trigger the Boltz-2 weight download on the
+# login node (compute nodes have no internet). Trp-cage miniprotein, no MSA, no ligand.
+sequences:
+  - protein:
+      id: A
+      sequence: NLYIQWLKDGGPSSGRPPPS
+      msa: empty
