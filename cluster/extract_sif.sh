@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # extract_sif.sh — unpack an lz4-compressed Apptainer .sif into a plain directory.
-# Apptainer's bundled unsquashfs on this cluster is gzip-only, so we (1) pull the
-# squashfs partition out of the SIF, then (2) extract it with an lz4-capable unsquashfs —
-# first the standalone one from the squashfs module, falling back to a conda-forge
+# The cluster's apptainer/unsquashfs is gzip-only, so we read the squashfs partition
+# STRAIGHT OUT OF THE SIF at its byte offset (unsquashfs -o) with an lz4-capable
+# unsquashfs — the squashfs module's tool first, falling back to conda-forge
 # squashfs-tools fetched via micromamba into scratch (no admin needed).
 #
 # Usage:  bash extract_sif.sh <path-to .sif> [output_dir]
@@ -17,30 +17,22 @@ export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-$SCRATCH/apptmp}"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
 module load apptainer/1.3.3-gcc-13.2.0-i5n6b74 2>/dev/null || module load apptainer 2>/dev/null || true
 
-SQFS="$APPTAINER_TMPDIR/$(basename "${SIF%.sif}").sqfs"
-
 echo "== SIF partition layout =="
 apptainer sif list "$SIF"
-FSID=$(apptainer sif list "$SIF" | awk -F'|' 'tolower($0) ~ /squashfs/ && $1 ~ /[0-9]/ {gsub(/[^0-9]/,"",$1); print $1; exit}')
-[ -z "${FSID:-}" ] && FSID=1
-if [ -f "$SQFS" ] && [ -s "$SQFS" ]; then
-  echo "== reusing already-dumped squashfs: $SQFS =="
-else
-  echo "== dumping squashfs partition (descriptor $FSID) -> $SQFS =="
-  apptainer sif dump "$FSID" "$SIF" > "$SQFS" || { echo "sif dump failed"; exit 1; }
-fi
-ls -lh "$SQFS"
+OFFSET=$(apptainer sif list "$SIF" | awk -F'|' 'tolower($0) ~ /squashfs/ {split($4,a,"-"); gsub(/[^0-9]/,"",a[1]); print a[1]; exit}')
+[ -z "${OFFSET:-}" ] && { echo "could not detect squashfs offset from sif list"; exit 1; }
+echo "== squashfs partition offset in SIF: $OFFSET =="
 
 extracted_ok() { [ -d "$OUT" ] && [ -n "$(ls -A "$OUT" 2>/dev/null)" ]; }
 
-echo "== attempt 1: standalone 'unsquashfs' from the squashfs module =="
+echo "== attempt 1: standalone 'unsquashfs' from the squashfs module (reads SIF at offset) =="
 rm -rf "$OUT"
-unsquashfs -f -d "$OUT" "$SQFS" 2>&1 | tee "$APPTAINER_TMPDIR/unsq1.log" | tail -6 || true
-if extracted_ok && ! grep -qiE 'lz4|unsupported|not supported|failed' "$APPTAINER_TMPDIR/unsq1.log"; then
-  echo "OK: extracted with the module's unsquashfs -> $OUT"; echo "$OUT"; exit 0
+unsquashfs -o "$OFFSET" -f -d "$OUT" "$SIF" 2>&1 | tee "$APPTAINER_TMPDIR/unsq1.log" | tail -6 || true
+if extracted_ok && ! grep -qiE 'lz4|unsupported|not supported|EOF|failed' "$APPTAINER_TMPDIR/unsq1.log"; then
+  echo "OK: extracted with the module's unsquashfs -> $OUT"; exit 0
 fi
 
-echo "== module unsquashfs couldn't do lz4; fetching conda-forge squashfs-tools (has lz4) via micromamba =="
+echo "== module unsquashfs can't do lz4; fetching conda-forge squashfs-tools (has lz4) via micromamba =="
 MM="$SCRATCH/micromamba"
 if [ ! -x "$MM/bin/micromamba" ]; then
   mkdir -p "$MM"
@@ -53,11 +45,11 @@ if [ ! -x "$SCRATCH/sqenv/bin/unsquashfs" ]; then
   HOME="$CONDA_HOME" "$MM/bin/micromamba" create -y -p "$SCRATCH/sqenv" -c conda-forge squashfs-tools || true
 fi
 [ -x "$SCRATCH/sqenv/bin/unsquashfs" ] || { echo "could not obtain conda-forge unsquashfs"; exit 1; }
-echo "== attempt 2: conda-forge unsquashfs =="
-rm -rf "$OUT"
-"$SCRATCH/sqenv/bin/unsquashfs" -f -d "$OUT" "$SQFS" 2>&1 | tail -10
-if extracted_ok; then
-  echo "OK: extracted with conda-forge unsquashfs -> $OUT"; echo "$OUT"; exit 0
-fi
 
+echo "== attempt 2: conda-forge unsquashfs (reads SIF at offset) =="
+rm -rf "$OUT"
+"$SCRATCH/sqenv/bin/unsquashfs" -o "$OFFSET" -f -d "$OUT" "$SIF" 2>&1 | tail -10
+if extracted_ok; then
+  echo "OK: extracted with conda-forge unsquashfs -> $OUT"; exit 0
+fi
 echo "FAILED to extract $SIF — paste the output above."; exit 1
