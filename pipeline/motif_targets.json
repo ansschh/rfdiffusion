@@ -1,0 +1,38 @@
+{
+  "_README": "Per-target motif specs for the RFD2 motif compiler. Each entry is the STRUCTURED result of the curated, reconciled trajectory in audit/subQB_curation/extractions/<id>/ (GPT-5.5 + independent Claude, reconciled, then deterministically CSD-verified). The nuanced reading was done by the extraction agents; here we record only the resulting structured facts. motif_compiler.py consumes this + the real PDB geometry; all atom selection is by deterministic distance, never by parsing prose. Cofactor representation strategy = 'reactive_core_cp_body' (user-chosen): fix metal + retained chelate donors + active-species hydride + Cp* ring as a rigid steric body; do not encode eta5 pi-bonding; substrate/TS placement is a separate, flagged step.",
+  "targets": {
+    "3ZP9": {
+      "host_pdb": "3ZP9",
+      "reaction_class": "asymmetric transfer hydrogenation (imine reduction, salsolidine)",
+      "cofactor_resname": "9TH",
+      "catalytic_metal": {"element": "IR", "oxidation_state": 3, "d_electrons": 6, "occupancy_note": "Ir modeled at ~0.30 occupancy in the crystal"},
+      "first_sphere": {
+        "retained_donors": ["N21", "N3"],
+        "retained_donor_roles": {"N21": "pyridyl-N (neutral)", "N3": "secondary benzenesulfonamido-N (likely deprotonated/amido)"},
+        "cp_star": {"detect": "auto", "expected_ring_carbons": 5, "role": "eta5 cap; kept as rigid steric body"},
+        "labile_leg": "CL",
+        "labile_leg_fate": "lost in active species; replaced by hydride (formate-assisted beta-H elimination)"
+      },
+      "active_species": {
+        "hydride": {"synthesize": true, "from_vector": "IR->CL", "ir_h_distance": 1.6, "name": "H1", "confidence": "inferred (Cl->H; not crystallographic)"}
+      },
+      "anchor": {
+        "type": "dative-supramolecular",
+        "description": "cofactor primary aryl-sulfonamide N2 binds native CA-II catalytic Zn (held by His94/His96/His119)",
+        "cofactor_anchor_atom": "N2",
+        "treat_as": "diagnostic",
+        "rationale": "de novo scaffold need not reuse CA-II's Zn; H_anchor preserved as evaluation diagnostic, not a fixed motif element (revisions doc R1/R2)"
+      },
+      "substrate": {
+        "name": "1-methyl-6,7-dimethoxy-3,4-dihydroisoquinoline (salsolidine precursor)",
+        "reactive_atoms": "imine C=N",
+        "present_in_crystal": false,
+        "place_in_v1": false,
+        "pose_source": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step"
+      },
+      "design": {"scaffold_length": 160, "ligand_only_pocket": true, "num_designs_default": 100},
+      "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
+      "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude"
+    }
+  }
+}

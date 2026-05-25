@@ -1,0 +1,118 @@
+{
+  "pdb_id": "3ZP9",
+  "strategy": "reactive_core_cp_body",
+  "csd_cutoffs_used": {
+    "C": 2.564,
+    "N": 2.266,
+    "CL": 2.564
+  },
+  "scaffold_length": 160,
+  "num_designs": 100,
+  "core_atoms": [
+    "IR",
+    "N3",
+    "N21",
+    "C1",
+    "C9",
+    "C7",
+    "C5",
+    "C3",
+    "H1"
+  ],
+  "selection_report": {
+    "metal": {
+      "name": "IR",
+      "occ": 0.3,
+      "xyz": [
+        20.046,
+        8.428,
+        11.734
+      ]
+    },
+    "donors_detected": [
+      {
+        "name": "C1",
+        "element": "C",
+        "dist": 2.125
+      },
+      {
+        "name": "C9",
+        "element": "C",
+        "dist": 2.135
+      },
+      {
+        "name": "C7",
+        "element": "C",
+        "dist": 2.144
+      },
+      {
+        "name": "N21",
+        "element": "N",
+        "dist": 2.169
+      },
+      {
+        "name": "C5",
+        "element": "C",
+        "dist": 2.195
+      },
+      {
+        "name": "C3",
+        "element": "C",
+        "dist": 2.22
+      },
+      {
+        "name": "N3",
+        "element": "N",
+        "dist": 2.232
+      },
+      {
+        "name": "CL",
+        "element": "CL",
+        "dist": 2.417
+      }
+    ],
+    "selected": [
+      "IR (metal IR)",
+      "N3 (N, 2.23 A, retained donor)",
+      "N21 (N, 2.17 A, retained donor)",
+      "C1 (C, 2.12 A, Cp* ring -- rigid steric body)",
+      "C9 (C, 2.13 A, Cp* ring -- rigid steric body)",
+      "C7 (C, 2.14 A, Cp* ring -- rigid steric body)",
+      "C5 (C, 2.20 A, Cp* ring -- rigid steric body)",
+      "C3 (C, 2.22 A, Cp* ring -- rigid steric body)"
+    ],
+    "synthesized": [
+      "H1 (H, hydride at 1.6 A along IR->CL; inferred (Cl->H; not crystallographic))"
+    ],
+    "dropped": [
+      "CL (CL, 2.42 A, labile leg -> replaced by hydride)"
+    ],
+    "warnings": []
+  },
+  "anchor": {
+    "type": "dative-supramolecular",
+    "description": "cofactor primary aryl-sulfonamide N2 binds native CA-II catalytic Zn (held by His94/His96/His119)",
+    "cofactor_anchor_atom": "N2",
+    "treat_as": "diagnostic",
+    "rationale": "de novo scaffold need not reuse CA-II's Zn; H_anchor preserved as evaluation diagnostic, not a fixed motif element (revisions doc R1/R2)",
+    "fixed_in_motif": false
+  },
+  "substrate": {
+    "name": "1-methyl-6,7-dimethoxy-3,4-dihydroisoquinoline (salsolidine precursor)",
+    "reactive_atoms": "imine C=N",
+    "present_in_crystal": false,
+    "place_in_v1": false,
+    "pose_source": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step",
+    "placed_in_v1": false
+  },
+  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/3ZP9/motif.pdb inference.ligand=LIG contigmap.contigs=['160-160'] ++inference.partially_fixed_ligand=\"{LIG:[IR,N3,N21,C1,C9,C7,C5,C3,H1]}\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/3ZP9/3ZP9_cond0 hydra.job_logging.root.level=WARN",
+  "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
+  "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude",
+  "notes": [
+    "Cp* ring kept as a rigid steric body; eta5 pi-bonding NOT encoded (RFD2 has no eta5 term).",
+    "Labile leg dropped; hydride synthesized (NOT crystallographic) -> active-species core.",
+    "Anchor (dative-to-CA-II-Zn) treated as a diagnostic, not a fixed motif element.",
+    "Substrate/TS pose deferred: 3ZP9 has no bound substrate and g-double-dagger is transferred (LOW conf).",
+    "$ARM = the dir holding compiled/<id>/; set it on the cluster before running the command."
+  ]
+}
