@@ -8,13 +8,16 @@
 #   sbatch cluster/arm_generate_array.sbatch 3ZP9__wrong_metal
 #   DESIGNS_PER_TASK=5 sbatch --array=0-19 cluster/arm_generate_array.sbatch 3ZP9
 #SBATCH --job-name=arm_arr
-#SBATCH --partition=dgxlo
-#SBATCH --gres=gpu:1
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:nvidia_h200:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --time=02:00:00
-#SBATCH --array=0-19%12
+#SBATCH --array=0-19%20
 #SBATCH --output=arm_arr_%A_%a.out
+# H200 on the 'gpu' partition (~80 available) -> all 20 tasks run at once.
+# If submission is rejected for the account, add: sbatch --account=<acct> ...
+# To fall back to the instant V100s: sbatch --partition=dgxlo --gres=gpu:1 ...
 set -uo pipefail
 
 TARGET="${1:-3ZP9}"                       # tagged dir under pipeline/compiled/
