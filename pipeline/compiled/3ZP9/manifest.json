@@ -6,8 +6,8 @@
   "num_guideposts": 4,
   "core_atoms": [
     "IR",
-    "N3",
     "N21",
+    "N3",
     "C1",
     "C9",
     "C7",
@@ -66,7 +66,7 @@
     }
   ],
   "contig": "['32,A131-131,31,A135-135,31,A198-198,31,A202-202,31']",
-  "contig_atoms": "{'A131':'CE1,CD1,CZ','A135':'CG2,CG1,CB','A198':'CD1,CD2,CG','A202':'CG,CD,CB'}",
+  "contig_atoms": "'{\\'A131\\':\\'CE1,CD1,CZ\\',\\'A135\\':\\'CG2,CG1,CB\\',\\'A198\\':\\'CD1,CD2,CG\\',\\'A202\\':\\'CG,CD,CB\\'}'",
   "ligand": "LIG",
   "selection_report": {
     "metal": {
@@ -117,8 +117,8 @@
     ],
     "selected": [
       "IR (metal IR)",
-      "N3 (N, 2.23 A, retained donor)",
       "N21 (N, 2.17 A, retained donor)",
+      "N3 (N, 2.23 A, retained donor)",
       "C1 (C, 2.12 A, Cp* ring -- rigid steric body)",
       "C9 (C, 2.13 A, Cp* ring -- rigid steric body)",
       "C7 (C, 2.14 A, Cp* ring -- rigid steric body)",
@@ -148,7 +148,7 @@
     "place_in_v1": false,
     "pose_source": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step"
   },
-  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/3ZP9/motif.pdb inference.ligand=LIG contigmap.contigs=\"['32,A131-131,31,A135-135,31,A198-198,31,A202-202,31']\" inference.contig_as_guidepost=True contigmap.contig_atoms=\"{'A131':'CE1,CD1,CZ','A135':'CG2,CG1,CB','A198':'CD1,CD2,CG','A202':'CG,CD,CB'}\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/3ZP9/3ZP9_cond0 hydra.job_logging.root.level=WARN",
+  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/3ZP9/motif.pdb inference.ligand=LIG contigmap.contigs=\"['32,A131-131,31,A135-135,31,A198-198,31,A202-202,31']\" inference.contig_as_guidepost=True contigmap.contig_atoms=\"'{\\'A131\\':\\'CE1,CD1,CZ\\',\\'A135\\':\\'CG2,CG1,CB\\',\\'A198\\':\\'CD1,CD2,CG\\',\\'A202\\':\\'CG,CD,CB\\'}'\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/3ZP9/3ZP9_cond0 hydra.job_logging.root.level=WARN",
   "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
   "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude",
   "notes": [

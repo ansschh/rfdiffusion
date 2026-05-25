@@ -228,9 +228,16 @@ def build_contig(guideposts, total_len):
 
 
 def build_contig_atoms(guideposts):
-    items = [f"'{g['chain']}{g['resseq']}':'{','.join(g['anchor_atoms'])}'"
-             for g in sorted(guideposts, key=lambda g: g["resseq"])]
-    return "{" + ",".join(items) + "}"
+    """Demo-exact escaped-string form. Hydra cannot parse a bare dict here ('no viable
+    alternative at input {'); the working demo wraps it in single quotes with backslash-
+    escaped inner quotes so Hydra sees a STRING literal that RFD2 then parses. The sbatch
+    passes it as  contigmap.contig_atoms="$VAR"  with VAR = '{\\'A131\\':\\'CE1,CD1,CZ\\'}'."""
+    parts = []
+    for g in sorted(guideposts, key=lambda g: g["resseq"]):
+        key = f"{g['chain']}{g['resseq']}"
+        val = ",".join(g["anchor_atoms"])
+        parts.append("\\'" + key + "\\':\\'" + val + "\\'")
+    return "'{" + ",".join(parts) + "}'"
 
 
 def fmt_atom(a, serial, resname=None, chain=None, resseq=None, record=None):
