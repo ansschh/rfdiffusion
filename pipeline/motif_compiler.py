@@ -183,10 +183,10 @@ def residue_atoms(atoms, chain, resseq, keep_alt):
             and (not a.altloc or a.altloc in keep_alt)]
 
 
-def select_guideposts(atoms, core, spec, metal, n):
+def select_guideposts(atoms, core, spec, metal, n, scramble=False):
     """Pick the n candidate second-sphere residues whose sidechains come closest to the
     reactive core, by deterministic distance. Anchor atoms = 3 sidechain heavies nearest
-    the core."""
+    the core. scramble=True picks the FARTHEST (Rev3 'no-A_c' negative control)."""
     keep = {"", metal.altloc} if metal.altloc else {""}
     cands = spec.get("guideposts", {}).get("candidates", [])
     core_xyz = [a.xyz for a in core]
@@ -206,7 +206,7 @@ def select_guideposts(atoms, core, spec, metal, n):
                        "resname": res[0].resname, "role": c.get("role", ""),
                        "min_dist_to_core": round(mind, 2), "anchor_atoms": anchors,
                        "atoms": res})
-    scored.sort(key=lambda g: g["min_dist_to_core"])
+    scored.sort(key=lambda g: g["min_dist_to_core"], reverse=scramble)
     return scored[:n]
 
 
@@ -286,8 +286,12 @@ def build_rfd2_command(motif_pdb, lig_resname, contig, contig_atoms, out_prefix,
     )
 
 
+WRONG_METAL_SWAP = "ZN"  # Rev3: swap Ir->Zn keeping geometry (tests metal-identity sensitivity)
+
+
 def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
-                   scaffold_length=None, num_designs=None, num_guideposts=None):
+                   scaffold_length=None, num_designs=None, num_guideposts=None,
+                   control="none"):
     spec = targets["targets"][pdb_id]
     metal_el, resname = spec["catalytic_metal"]["element"], spec["cofactor_resname"]
     scaffold_length = scaffold_length or spec["design"]["scaffold_length"]
@@ -302,25 +306,39 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
     atoms = parse_pdb(pdb_path)
     csd = load_csd_cutoffs(audit_dir, pdb_id, metal_el)
     metal = find_metal(atoms, resname, metal_el)
-    donors = first_sphere(atoms, metal, csd)
+    donors = first_sphere(atoms, metal, csd)   # real metal geometry drives detection
     core, report = select_reactive_core(atoms, spec, metal, donors)
-    guideposts = select_guideposts(atoms, core, spec, metal, num_guideposts)
+
+    # --- Rev3 negative controls (deliberately damaged trajectories) ---
+    if control == "wrong_metal":
+        core[0].element = WRONG_METAL_SWAP            # relabel metal, keep all coordinates
+        core[0].name = WRONG_METAL_SWAP
+        report["control"] = f"wrong_metal: {metal_el}->{WRONG_METAL_SWAP} (geometry unchanged)"
+    elif control == "scramble_guideposts":
+        report["control"] = "scramble_guideposts: farthest contacts (no-A_c proxy)"
+    elif control != "none":
+        raise SystemExit(f"unknown control '{control}'")
+
+    guideposts = select_guideposts(atoms, core, spec, metal, num_guideposts,
+                                   scramble=(control == "scramble_guideposts"))
     if not guideposts:
         raise SystemExit("no guidepost residues resolved — check guideposts.candidates")
 
     contig = build_contig(guideposts, scaffold_length)
     contig_atoms = build_contig_atoms(guideposts)
 
-    out_dir = os.path.join(out_root, pdb_id)
+    tag = pdb_id if control == "none" else f"{pdb_id}__{control}"
+    out_dir = os.path.join(out_root, tag)
     os.makedirs(out_dir, exist_ok=True)
     write_motif_pdb(core, guideposts, os.path.join(out_dir, "motif.pdb"))
 
-    out_prefix = f"$SCRATCH/RFdiffusion2/arm_designs/{pdb_id}/{pdb_id}_cond0"
-    cmd = build_rfd2_command(f"$ARM/{pdb_id}/motif.pdb", "LIG", contig, contig_atoms,
+    out_prefix = f"$SCRATCH/RFdiffusion2/arm_designs/{tag}/{tag}_cond0"
+    cmd = build_rfd2_command(f"$ARM/{tag}/motif.pdb", "LIG", contig, contig_atoms,
                              out_prefix, num_designs)
 
     manifest = {
-        "pdb_id": pdb_id, "strategy": "reactive_core_cp_body + nearest-contact guideposts",
+        "pdb_id": pdb_id, "tag": tag, "control": control,
+        "strategy": "reactive_core_cp_body + nearest-contact guideposts",
         "scaffold_length": scaffold_length, "num_designs": num_designs,
         "num_guideposts": len(guideposts),
         "core_atoms": [a.name for a in core],
@@ -355,14 +373,18 @@ def main():
     ap.add_argument("--scaffold-length", type=int, default=None)
     ap.add_argument("--num-designs", type=int, default=None)
     ap.add_argument("--guideposts", type=int, default=None)
+    ap.add_argument("--control", default="none",
+                    choices=["none", "wrong_metal", "scramble_guideposts"])
     a = ap.parse_args()
     targets = json.load(open(a.targets))
     if a.pdb_id not in targets["targets"]:
         raise SystemExit(f"{a.pdb_id} not in {a.targets}")
     out_dir, m = compile_target(a.pdb_id, targets, a.audit, a.pdb_dir, a.out,
-                                a.scaffold_length, a.num_designs, a.guideposts)
+                                a.scaffold_length, a.num_designs, a.guideposts, a.control)
     r = m["selection_report"]
-    print(f"=== motif compiled: {a.pdb_id} -> {out_dir} ===")
+    if m["control"] != "none":
+        print(f"*** NEGATIVE CONTROL: {r.get('control')} ***")
+    print(f"=== motif compiled: {m['tag']} -> {out_dir} ===")
     print(f"metal {r['metal']['name']} (occ {r['metal']['occ']})")
     print("reactive core:")
     for s in r["selected"]:    print(f"   + {s}")

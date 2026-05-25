@@ -1,0 +1,164 @@
+{
+  "pdb_id": "3ZP9",
+  "tag": "3ZP9__wrong_metal",
+  "control": "wrong_metal",
+  "strategy": "reactive_core_cp_body + nearest-contact guideposts",
+  "scaffold_length": 160,
+  "num_designs": 100,
+  "num_guideposts": 4,
+  "core_atoms": [
+    "ZN",
+    "N21",
+    "N3",
+    "C1",
+    "C9",
+    "C7",
+    "C5",
+    "C3",
+    "H1"
+  ],
+  "guideposts": [
+    {
+      "chain": "A",
+      "resseq": 131,
+      "resname": "PHE",
+      "role": "hydrophobic groove, Cp*Ir contact",
+      "min_dist_to_core": 3.66,
+      "anchor_atoms": [
+        "CE1",
+        "CD1",
+        "CZ"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 135,
+      "resname": "VAL",
+      "role": "hydrophobic groove",
+      "min_dist_to_core": 4.79,
+      "anchor_atoms": [
+        "CG2",
+        "CG1",
+        "CB"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 202,
+      "resname": "PRO",
+      "role": "hydrophobic groove",
+      "min_dist_to_core": 5.03,
+      "anchor_atoms": [
+        "CG",
+        "CD",
+        "CB"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 198,
+      "resname": "LEU",
+      "role": "hydrophobic groove",
+      "min_dist_to_core": 5.66,
+      "anchor_atoms": [
+        "CD1",
+        "CD2",
+        "CG"
+      ]
+    }
+  ],
+  "contig": "['32,A131-131,31,A135-135,31,A198-198,31,A202-202,31']",
+  "contig_atoms": "'{\\'A131\\':\\'CE1,CD1,CZ\\',\\'A135\\':\\'CG2,CG1,CB\\',\\'A198\\':\\'CD1,CD2,CG\\',\\'A202\\':\\'CG,CD,CB\\'}'",
+  "ligand": "LIG",
+  "selection_report": {
+    "metal": {
+      "name": "IR",
+      "occ": 0.3
+    },
+    "donors_detected": [
+      {
+        "name": "C1",
+        "element": "C",
+        "dist": 2.125
+      },
+      {
+        "name": "C9",
+        "element": "C",
+        "dist": 2.135
+      },
+      {
+        "name": "C7",
+        "element": "C",
+        "dist": 2.144
+      },
+      {
+        "name": "N21",
+        "element": "N",
+        "dist": 2.169
+      },
+      {
+        "name": "C5",
+        "element": "C",
+        "dist": 2.195
+      },
+      {
+        "name": "C3",
+        "element": "C",
+        "dist": 2.22
+      },
+      {
+        "name": "N3",
+        "element": "N",
+        "dist": 2.232
+      },
+      {
+        "name": "CL",
+        "element": "CL",
+        "dist": 2.417
+      }
+    ],
+    "selected": [
+      "IR (metal IR)",
+      "N21 (N, 2.17 A, retained donor)",
+      "N3 (N, 2.23 A, retained donor)",
+      "C1 (C, 2.12 A, Cp* ring -- rigid steric body)",
+      "C9 (C, 2.13 A, Cp* ring -- rigid steric body)",
+      "C7 (C, 2.14 A, Cp* ring -- rigid steric body)",
+      "C5 (C, 2.20 A, Cp* ring -- rigid steric body)",
+      "C3 (C, 2.22 A, Cp* ring -- rigid steric body)"
+    ],
+    "synthesized": [
+      "H1 (H, hydride 1.6 A along IR->CL; inferred (Cl->H; not crystallographic))"
+    ],
+    "dropped": [
+      "CL (CL, 2.42 A, labile leg -> hydride)"
+    ],
+    "warnings": [],
+    "control": "wrong_metal: IR->ZN (geometry unchanged)"
+  },
+  "anchor": {
+    "type": "dative-supramolecular",
+    "description": "cofactor primary aryl-sulfonamide N2 binds native CA-II catalytic Zn (held by His94/His96/His119)",
+    "cofactor_anchor_atom": "N2",
+    "treat_as": "diagnostic",
+    "rationale": "de novo scaffold need not reuse CA-II's Zn; H_anchor preserved as evaluation diagnostic, not a fixed motif element (revisions doc R1/R2)",
+    "fixed_in_motif": false
+  },
+  "substrate": {
+    "name": "1-methyl-6,7-dimethoxy-3,4-dihydroisoquinoline (salsolidine precursor)",
+    "reactive_atoms": "imine C=N",
+    "present_in_crystal": false,
+    "place_in_v1": false,
+    "pose_source": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step"
+  },
+  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/3ZP9__wrong_metal/motif.pdb inference.ligand=LIG contigmap.contigs=\"['32,A131-131,31,A135-135,31,A198-198,31,A202-202,31']\" inference.contig_as_guidepost=True contigmap.contig_atoms=\"'{\\'A131\\':\\'CE1,CD1,CZ\\',\\'A135\\':\\'CG2,CG1,CB\\',\\'A198\\':\\'CD1,CD2,CG\\',\\'A202\\':\\'CG,CD,CB\\'}'\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/3ZP9__wrong_metal/3ZP9__wrong_metal_cond0 hydra.job_logging.root.level=WARN",
+  "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
+  "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude",
+  "notes": [
+    "Active-site scaffolding (RFD2-native): guideposts + rigid cofactor ligand -> fresh fold.",
+    "Guideposts = nearest cofactor-contacting 2nd-sphere residues (by distance); NOT pocket reconstruction.",
+    "Cp* ring kept as rigid steric body; eta5 NOT encoded; labile Cl dropped; hydride synthesized (not crystallographic).",
+    "Anchor (dative-to-CA-II-Zn) = diagnostic, not fixed. Substrate/TS pose deferred (3ZP9 has no bound substrate; g-dd transferred, LOW conf).",
+    "$ARM = dir holding compiled/<id>/ on the cluster."
+  ]
+}
