@@ -5,12 +5,15 @@
 # de-risking we used for RFD2.
 #   sbatch cluster/selfconsist_smoke.sbatch 3ZP9
 #SBATCH --job-name=sc_smoke
-#SBATCH --partition=dgxlo
-#SBATCH --gres=gpu:1
+#SBATCH --partition=gpu,beta
+#SBATCH --gres=gpu:nvidia_l40s:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --time=01:00:00
 #SBATCH --output=sc_smoke_%j.out
+# Boltz-2.2.1 folds in bfloat16 -> needs Ampere+ (V100/compute-7.0 lacks bf16). L40S (Ada)
+# on gpu/beta does bf16. To force the instant V100s instead, override at submit:
+#   sbatch --partition=dgxlo --gres=gpu:1 ...  (will fail in Boltz unless Boltz<2.2 is pinned)
 set -uo pipefail
 
 TARGET="${1:-3ZP9}"
