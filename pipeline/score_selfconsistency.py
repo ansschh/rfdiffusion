@@ -38,7 +38,28 @@ def pdb_ca(path):
 
 
 def cif_ca(path):
-    """Parse CA coords from an mmCIF _atom_site loop (column-order aware)."""
+    """CA coords from an mmCIF. Prefer biopython (robust); fall back to the hand parser."""
+    try:
+        from Bio.PDB import MMCIFParser
+        s = MMCIFParser(QUIET=True).get_structure("x", path)
+        out = []
+        for model in s:
+            for chain in model:
+                for res in chain:
+                    if res.has_id("CA"):
+                        c = res["CA"].coord
+                        out.append((res.id[1], float(c[0]), float(c[1]), float(c[2])))
+            break  # first model only
+        out.sort(key=lambda r: r[0])
+        if out:
+            return np.array([[x, y, z] for _, x, y, z in out], dtype=float)
+    except Exception:
+        pass
+    return _cif_ca_manual(path)
+
+
+def _cif_ca_manual(path):
+    """Fallback: parse CA coords from an mmCIF _atom_site loop (column-order aware)."""
     cols, rows, in_loop, header = [], [], False, False
     with open(path) as fh:
         for line in fh:
