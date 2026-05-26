@@ -152,8 +152,59 @@ def find_outputs(design_dir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--design"); ap.add_argument("--pred"); ap.add_argument("--conf")
-    ap.add_argument("--batch"); ap.add_argument("--out")
+    ap.add_argument("--batch"); ap.add_argument("--target-dir", dest="target_dir"); ap.add_argument("--out")
     a = ap.parse_args()
+
+    if a.target_dir:
+        # Layout from selfconsist.sbatch: <dir>/designs/<id>.pdb  +  <dir>/folds/**/predictions/<id>__s<i>/
+        # Per design = best-of-N over its sequences. Design passes if ANY sequence folds back
+        # with ca_rmsd<=2.0 AND that fold's plddt>=0.70 (standard de novo self-consistency).
+        from collections import defaultdict
+        base = a.target_dir
+        groups = defaultdict(list)
+        for pd in glob.glob(os.path.join(base, "folds", "**", "predictions", "*"), recursive=True):
+            name = os.path.basename(pd)
+            if "__s" not in name:
+                continue
+            did = name.split("__s")[0]
+            cif = glob.glob(os.path.join(pd, "*_model_0.cif"))
+            conf = glob.glob(os.path.join(pd, "confidence_*_model_0.json"))
+            if cif:
+                groups[did].append((cif[0], conf[0] if conf else None))
+        rows = []
+        for did, folds in sorted(groups.items()):
+            dpdb = os.path.join(base, "designs", did + ".pdb")
+            if not os.path.isfile(dpdb):
+                continue
+            P = pdb_ca(dpdb)
+            seqres = []
+            for cif, conf in folds:
+                r, _ = kabsch_rmsd(P, cif_ca(cif))
+                seqres.append({"ca_rmsd": round(r, 3) if r is not None else None,
+                               "plddt": read_plddt(conf).get("complex_plddt")})
+            best_rmsd = min((s["ca_rmsd"] for s in seqres if s["ca_rmsd"] is not None), default=None)
+            best_plddt = max((s["plddt"] for s in seqres if s["plddt"] is not None), default=None)
+            passed = any(s["ca_rmsd"] is not None and s["ca_rmsd"] <= RMSD_PASS
+                         and s["plddt"] is not None and s["plddt"] >= PLDDT_PASS for s in seqres)
+            rows.append({"design": did, "n_seqs": len(seqres), "best_ca_rmsd": best_rmsd,
+                         "best_plddt": round(best_plddt, 3) if best_plddt is not None else None,
+                         "self_consistent": passed})
+        if not rows:
+            raise SystemExit(f"no scorable designs under {base} (need designs/*.pdb + folds/**/predictions/*__s*)")
+        ok = [r for r in rows if r["self_consistent"]]
+        rmsds = sorted(r["best_ca_rmsd"] for r in rows if r["best_ca_rmsd"] is not None)
+        summary = {"target": os.path.basename(os.path.normpath(base)), "n_designs": len(rows),
+                   "n_self_consistent": len(ok), "frac_self_consistent": round(len(ok)/len(rows), 3),
+                   "best_ca_rmsd_overall": rmsds[0] if rmsds else None,
+                   "median_best_ca_rmsd": rmsds[len(rmsds)//2] if rmsds else None}
+        json.dump({"summary": summary, "designs": rows}, open(os.path.join(base, "scores_sc.json"), "w"), indent=2)
+        print(f"=== layer-2 self-consistency (best-of-N): {summary['target']} ===")
+        for r in rows:
+            print(f"  {r['design']}: best_rmsd={r['best_ca_rmsd']} best_plddt={r['best_plddt']} "
+                  f"n_seqs={r['n_seqs']} -> {'PASS' if r['self_consistent'] else 'no'}")
+        for k, v in summary.items():
+            print(f"  {k}: {v}")
+        return
 
     if a.batch:
         subdirs = [d for d in sorted(glob.glob(os.path.join(a.batch, "*"))) if os.path.isdir(d)]
