@@ -22,7 +22,7 @@ source "$LMPNN_VENV/bin/activate"
 python -m pip install -q --upgrade pip wheel
 echo "   installing torch (cuda) + LigandMPNN runtime deps (numpy<1.24 for ProDy)..."
 pip install -q torch                       # default wheel bundles CUDA (works on the V100)
-pip install -q 'numpy<1.24' prody ml_collections scipy
+pip install -q 'numpy<1.24' prody ml_collections scipy dm-tree einops   # dm-tree: LigandMPNN's bundled openfold does 'import tree'
 cd "$LMPNN"
 [ -d model_params ] && [ -n "$(ls -A model_params 2>/dev/null)" ] || bash get_model_params.sh "./model_params"
 echo "   LigandMPNN sanity:"; python run.py --help 2>&1 | head -3 || echo "(run.py --help failed)"
