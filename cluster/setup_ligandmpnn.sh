@@ -33,6 +33,13 @@ source "$BOLTZ_VENV/bin/activate"
 pip install -q 'boltz==2.2.1'              # repins numpy>=1.24, biopython==1.84, scipy==1.13.1
 python -c "import boltz, numba, numpy; print('   boltz venv OK; numpy', numpy.__version__)" \
   || echo '!! boltz venv still broken — paste this output'
+# Repopulate Boltz's CCD/canonical-molecule cache for this version (needs internet -> login node).
+# Otherwise an offline compute node fails with "CCD component ALA not found".
+HERE="$(cd "$(dirname "$0")" && pwd)"
+echo "   repopulating Boltz CCD cache (CPU prefetch)..."
+boltz predict "$HERE/boltz_prefetch.yaml" --cache "$SCRATCH/.boltz" \
+  --out_dir "$SCRATCH/bz_prefetch" --accelerator cpu --no_kernels --override 2>&1 | tail -4 || true
+ls "$SCRATCH/.boltz" 2>/dev/null
 deactivate
 
 echo
