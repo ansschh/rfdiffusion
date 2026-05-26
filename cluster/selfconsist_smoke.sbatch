@@ -16,11 +16,11 @@ set -uo pipefail
 TARGET="${1:-3ZP9}"
 SCRATCH="${SCRATCH_DIR:-/resnick/scratch/atiwari2}"
 LMPNN="$SCRATCH/LigandMPNN"
-VENV="${BOLTZ_VENV:-$SCRATCH/boltz-venv}"
+LMPNN_VENV="${LMPNN_VENV:-$SCRATCH/lmpnn-venv}"
+BOLTZ_VENV="${BOLTZ_VENV:-$SCRATCH/boltz-venv}"
 export BOLTZ_CACHE="${BOLTZ_CACHE:-$SCRATCH/.boltz}"
 export HOME="${SCRATCH}/condahome"; mkdir -p "$HOME"
 module load python/3.11.6 2>/dev/null || module load python3 2>/dev/null || true
-source "$VENV/bin/activate" || { echo "ERROR: boltz venv missing"; exit 1; }
 
 DESIGNDIR="$SCRATCH/RFdiffusion2/arm_designs/$TARGET"
 DESIGN="$(find "$DESIGNDIR" -maxdepth 1 -name '*cond0_0-atomized-bb-False.pdb' 2>/dev/null | head -1)"
@@ -33,6 +33,7 @@ nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader
 grep -v ' ORI ' "$DESIGN" > "$WORK/design.pdb"
 
 echo "=== (1) LigandMPNN sequence design (cofactor LIG as atom context) ==="
+source "$LMPNN_VENV/bin/activate" || { echo "ERROR: lmpnn venv missing — run setup_ligandmpnn.sh"; exit 1; }
 CKPT="$(ls "$LMPNN"/model_params/ligandmpnn_v_*.pt 2>/dev/null | head -1)"
 [ -f "$CKPT" ] || { echo "ERROR: no LigandMPNN weights — run setup_ligandmpnn.sh"; exit 1; }
 cd "$LMPNN"
@@ -55,6 +56,8 @@ echo "designed sequence (${#SEQ} aa): $SEQ"
 [ -n "$SEQ" ] || { echo 'ERROR: could not parse a designed sequence'; exit 1; }
 
 echo "=== (3) Boltz-2 single-sequence fold (protein self-consistency, no cofactor) ==="
+deactivate 2>/dev/null || true
+source "$BOLTZ_VENV/bin/activate" || { echo "ERROR: boltz venv missing"; exit 1; }
 cat > "$WORK/fold.yaml" <<EOF
 sequences:
   - protein:
