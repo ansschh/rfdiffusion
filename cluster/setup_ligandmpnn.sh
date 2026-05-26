@@ -22,8 +22,13 @@ echo "== activate Boltz venv ($VENV) — reuses its torch+cuda =="
 source "$VENV/bin/activate" || { echo "ERROR: $VENV missing — run setup_boltz.sh first"; exit 1; }
 
 echo "== install LigandMPNN python deps (torch already present from boltz) =="
-pip install -q numpy ml_collections 2>/dev/null || true
+pip install -q ml_collections 2>/dev/null || true
 [ -f requirements.txt ] && pip install -q -r requirements.txt 2>/dev/null || true
+# LigandMPNN/ProDy pin an old numpy (1.23) that breaks Boltz's numba in this shared venv.
+# Restore a numpy compatible with BOTH (LigandMPNN runs fine on >=1.24; Boltz needs it).
+pip install -q 'numpy>=1.24,<2'
+python -c "import numpy, numba; print('numpy', numpy.__version__, '+ numba OK')" || \
+  echo '!! numpy/numba still mismatched — may need a separate LigandMPNN venv'
 
 echo "== download model weights (-> $LMPNN/model_params) =="
 if [ ! -d model_params ] || [ -z "$(ls -A model_params 2>/dev/null)" ]; then

@@ -30,9 +30,12 @@ REPO="${REPO_DIR:-/resnick/scratch/atiwari2/rfdiffusion}"
 SCRATCH="${SCRATCH_DIR:-/resnick/scratch/atiwari2}"
 APPT_MODULE="${APPT_MODULE:-apptainer/1.3.3-gcc-13.2.0-i5n6b74}"
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-$SCRATCH/.apptainer_cache}"
-export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-$SCRATCH/apptmp}"
+# Per-task TMPDIR: concurrent apptainer execs of the sandbox collide on a shared session
+# dir (-> "/bin/sh not found / container empty"). Isolate each array task.
+export APPTAINER_TMPDIR="$SCRATCH/apptmp/${SLURM_JOB_ID:-j}_${SLURM_ARRAY_TASK_ID:-0}"
 RFD2HOME="$SCRATCH/rfd2home"
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" "$RFD2HOME"
+trap 'rm -rf "$APPTAINER_TMPDIR"' EXIT
 module load "$APPT_MODULE" 2>/dev/null || module load apptainer 2>/dev/null || true
 
 ARM="$REPO/pipeline/compiled"
