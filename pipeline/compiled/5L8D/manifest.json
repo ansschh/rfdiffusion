@@ -1,0 +1,101 @@
+{
+  "pdb_id": "5L8D",
+  "tag": "5L8D",
+  "control": "none",
+  "strategy": "reactive_core_cp_body + nearest-contact guideposts",
+  "scaffold_length": 160,
+  "num_designs": 100,
+  "num_guideposts": 3,
+  "core_atoms": [
+    "RU",
+    "NAL",
+    "NAM",
+    "OXT",
+    "C",
+    "CL",
+    "O1"
+  ],
+  "guideposts": [
+    {
+      "chain": "B",
+      "resseq": 398,
+      "resname": "TRP",
+      "role": "pocket",
+      "min_dist_to_core": 4.1,
+      "anchor_atoms": [
+        "CZ2",
+        "NE1",
+        "CH2"
+      ]
+    },
+    {
+      "chain": "B",
+      "resseq": 100,
+      "resname": "TRP",
+      "role": "pocket",
+      "min_dist_to_core": 5.21,
+      "anchor_atoms": [
+        "CE2",
+        "CZ2",
+        "CD2"
+      ]
+    },
+    {
+      "chain": "B",
+      "resseq": 402,
+      "resname": "TYR",
+      "role": "pocket",
+      "min_dist_to_core": 5.53,
+      "anchor_atoms": [
+        "CZ",
+        "OH",
+        "CE2"
+      ]
+    }
+  ],
+  "contig": "['40,B100-100,39,B398-398,39,B402-402,39']",
+  "contig_atoms": "'{\\'B100\\':\\'CE2,CZ2,CD2\\',\\'B398\\':\\'CZ2,NE1,CH2\\',\\'B402\\':\\'CZ,OH,CE2\\'}'",
+  "ligand": "LIG",
+  "selection_report": {
+    "metal": {
+      "name": "RU",
+      "element": "RU",
+      "occ": 0.9
+    },
+    "selected": [
+      "RU (metal RU)",
+      "NAL (N, 1.98 A, retained)",
+      "NAM (N, 2.17 A, retained)",
+      "OXT (O, 2.19 A, retained)",
+      "C (C, 1.85 A, retained)",
+      "CL (CL, 2.50 A, retained)"
+    ],
+    "synthesized": [
+      "O1 (O, synthesized aqua at open site; inferred)"
+    ],
+    "dropped": [
+      "C (C, 2.28 A, labile -> dropped)"
+    ],
+    "warnings": []
+  },
+  "anchor": {
+    "type": "supramolecular bpza-carboxylate -- Arg137 salt bridge",
+    "treat_as": "diagnostic",
+    "fixed_in_motif": false
+  },
+  "substrate": {
+    "name": "trans-beta-methylstyrene",
+    "present_in_crystal": false,
+    "place_in_v1": false
+  },
+  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/5L8D/motif.pdb inference.ligand=LIG contigmap.contigs=\"['40,B100-100,39,B398-398,39,B402-402,39']\" inference.contig_as_guidepost=True contigmap.contig_atoms=\"'{\\'B100\\':\\'CE2,CZ2,CD2\\',\\'B398\\':\\'CZ2,NE1,CH2\\',\\'B402\\':\\'CZ,OH,CE2\\'}'\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/5L8D/5L8D_cond0 hydra.job_logging.root.level=WARN",
+  "verification": "audit/subQB_curation/extractions/5L8D/deterministic_checks.json",
+  "provenance": "Lopez/Menage Chem. Commun. 2017 53 3579; reconciled GPT-5.5 + Claude",
+  "notes": [
+    "Active-site scaffolding (RFD2-native): guideposts + rigid cofactor ligand -> fresh fold.",
+    "Guideposts = nearest cofactor-contacting 2nd-sphere residues (by distance); NOT pocket reconstruction.",
+    "Cp* ring kept as rigid steric body; eta5 NOT encoded; labile Cl dropped; hydride synthesized (not crystallographic).",
+    "Anchor (dative-to-CA-II-Zn) = diagnostic, not fixed. Substrate/TS pose deferred (3ZP9 has no bound substrate; g-dd transferred, LOW conf).",
+    "$ARM = dir holding compiled/<id>/ on the cluster."
+  ]
+}

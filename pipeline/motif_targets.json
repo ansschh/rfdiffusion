@@ -46,6 +46,79 @@
       "design": {"scaffold_length": 160, "num_designs_default": 100},
       "verification": "audit/subQB_curation/extractions/3ZP9/deterministic_checks.json -> STRUCTURALLY VALIDATED (18e, CN, CSD bond distributions, motif existence, consistency)",
       "provenance": "Monnard/Ward Chem. Sci. 2013 4 3269 (DOI 10.1039/c3sc51065d); reconciled GPT-5.5 + Claude"
+    },
+    "3WJC": {
+      "host_pdb": "3WJC",
+      "reaction_class": "stereoselective phenylacetylene insertion polymerization (Rh(I))",
+      "cofactor_resname": "RMD",
+      "catalytic_metal": {"element": "RH", "oxidation_state": 1, "d_electrons": 8},
+      "core_spec": {
+        "metal": {"element": "RH", "resname": "RMD"},
+        "retained_atoms": ["RMD:C3B", "RMD:C4B", "RMD:C5B", "RMD:C6B", "RMD:C7B"],
+        "labile_atoms": ["RMD:C1C", "RMD:C4C", "RMD:C5C", "RMD:C8C"],
+        "open_site": {"synthesize": "none"},
+        "note": "CpRh(COD): retained = eta5-Cp ring (5 B-carbons); labile = COD diene donors (C-carbons, dropped); no hydride (substrate phenylacetylene binds the open face)."
+      },
+      "guideposts": {"num_guideposts": 4, "candidates": [
+        {"resseq": 100, "resname": "LEU", "role": "hydrophobic wall (Cp-burying)"},
+        {"resseq": 128, "resname": "VAL", "role": "hydrophobic wall"},
+        {"resseq": 131, "resname": "ILE", "role": "hydrophobic wall"},
+        {"resseq": 148, "resname": "LEU", "role": "hydrophobic wall"},
+        {"resseq": 158, "resname": "LEU", "role": "hydrophobic wall"},
+        {"resseq": 159, "resname": "LEU", "role": "hydrophobic wall"}
+      ]},
+      "anchor": {"type": "covalent maleimide-Cys96", "treat_as": "diagnostic"},
+      "substrate": {"name": "phenylacetylene", "present_in_crystal": false, "place_in_v1": false},
+      "design": {"scaffold_length": 160, "num_designs_default": 100},
+      "verification": "audit/subQB_curation/extractions/3WJC/deterministic_checks.json",
+      "provenance": "Fukumoto/Hayashi ChemCatChem 2014 6 1229; reconciled GPT-5.5 + Claude"
+    },
+    "5L8D": {
+      "host_pdb": "5L8D",
+      "reaction_class": "alkene oxychlorination (Ru(II))",
+      "cofactor_resname": "6RP",
+      "catalytic_metal": {"element": "RU", "oxidation_state": 2, "d_electrons": 6},
+      "core_spec": {
+        "metal": {"element": "RU", "resname": "RU"},
+        "retained_atoms": ["6RP:NAL", "6RP:NAM", "6RP:OXT", "CMO:611:C", "CL:CL"],
+        "labile_atoms": ["CMO:612:C"],
+        "open_site": {"synthesize": "aqua", "along_from": "CMO:612:C", "dist": 2.1, "name": "O1"},
+        "note": "Octahedral Ru(bpza)(CO)2Cl, NO Cp. Retained = bpza(2 pyrazolyl-N NAL/NAM + carboxylate-O OXT) + CO1 (CMO611 C) + Cl. Labile = CO2 (CMO612 C) -> aqua opens the oxidant site."
+      },
+      "guideposts": {"num_guideposts": 3, "candidates": [
+        {"resseq": 100, "resname": "TRP", "role": "pocket"},
+        {"resseq": 398, "resname": "TRP", "role": "pocket"},
+        {"resseq": 402, "resname": "TYR", "role": "pocket"}
+      ]},
+      "anchor": {"type": "supramolecular bpza-carboxylate -- Arg137 salt bridge", "treat_as": "diagnostic"},
+      "substrate": {"name": "trans-beta-methylstyrene", "present_in_crystal": false, "place_in_v1": false},
+      "design": {"scaffold_length": 160, "num_designs_default": 100},
+      "verification": "audit/subQB_curation/extractions/5L8D/deterministic_checks.json",
+      "provenance": "Lopez/Menage Chem. Commun. 2017 53 3579; reconciled GPT-5.5 + Claude"
+    },
+    "5OD5": {
+      "host_pdb": "5OD5",
+      "reaction_class": "asymmetric transfer hydrogenation (imine -> salsolidine, Ir(III))",
+      "cofactor_resname": "RIR",
+      "catalytic_metal": {"element": "IR", "oxidation_state": 3, "d_electrons": 6,
+        "occupancy_note": "Ir disordered across several modeled positions (occ 0.16-0.63); use best-resolved RIR copy"},
+      "core_spec": {
+        "metal": {"element": "IR", "resname": "RIR"},
+        "retained_atoms": ["RIR:C17", "RIR:C18", "RIR:C19", "RIR:C20", "RIR:C21", "9RT:N2", "9RT:N3"],
+        "labile_atoms": [],
+        "open_site": {"synthesize": "none"},
+        "note": "Cp*Ir(kappa2-N,N) like 3ZP9 but crystallographically disordered; Cl not resolved. His227 COORDINATES the Ir open leg in the crystal, so NO synthesized hydride (it would clash with His227). His227 enters as a guidepost at its real coordinating position (stereocontrol residue, like the demo's catalytic His)."
+      },
+      "guideposts": {"num_guideposts": 3, "candidates": [
+        {"resseq": 227, "resname": "HIS", "role": "key stereocontrol; H227A collapses ee 35->3%"},
+        {"resseq": 226, "resname": "THR", "role": "near Ir"},
+        {"resseq": 288, "resname": "TYR", "role": "pocket / anchor region"}
+      ]},
+      "anchor": {"type": "supramolecular redox-switchable Fe(III)-azotochelin -> CeuE", "treat_as": "diagnostic"},
+      "substrate": {"name": "6,7-dimethoxy-1-methyl-3,4-dihydroisoquinoline", "present_in_crystal": false, "place_in_v1": false},
+      "design": {"scaffold_length": 160, "num_designs_default": 100},
+      "verification": "audit/subQB_curation/extractions/5OD5/deterministic_checks.json",
+      "provenance": "Raines/Duhme-Klair Nat. Catal. 2018 1 680; reconciled GPT-5.5 + Claude"
     }
   }
 }

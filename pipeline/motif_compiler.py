@@ -178,6 +178,79 @@ def select_reactive_core(atoms, spec, metal, donors):
     return core, report
 
 
+def parse_atom_key(key):
+    """'RESNAME:NAME' or 'RESNAME:RESSEQ:NAME' (resseq disambiguates duplicate residues)."""
+    p = key.split(":")
+    return (p[0], None, p[1]) if len(p) == 2 else (p[0], int(p[1]), p[2])
+
+
+def find_named_atoms(atoms, metal, keys, keep_alt):
+    """Resolve atom keys to the matching atom nearest the metal (alt-loc consistent)."""
+    found, missing = [], []
+    for key in keys:
+        rn, rs, nm = parse_atom_key(key)
+        cands = [a for a in atoms if a.resname == rn and a.name == nm
+                 and (rs is None or a.resseq == rs)
+                 and (not a.altloc or a.altloc in keep_alt)]
+        if cands:
+            found.append(min(cands, key=lambda a: dist(a.xyz, metal.xyz)))
+        else:
+            missing.append(key)
+    return found, missing
+
+
+def find_metal_explicit(atoms, mspec):
+    cands = [a for a in atoms if a.element == mspec["element"]
+             and ("resname" not in mspec or a.resname == mspec["resname"])
+             and ("chain" not in mspec or a.chain == mspec["chain"])]
+    if not cands:
+        raise SystemExit(f"metal {mspec['element']} ({mspec.get('resname')}) not found")
+    return max(cands, key=lambda a: a.occ)   # best-resolved copy (handles disorder, e.g. 5OD5)
+
+
+def select_reactive_core_explicit(atoms, cs, metal):
+    """Explicit reactive core: named retained donors + named labile atoms (dropped) +
+    optional synthesized open-site ligand (hydride/aqua). Handles octahedral (no Cp),
+    multi-atom labile ligands (e.g. COD), and multi-residue cofactors."""
+    keep = {"", metal.altloc} if metal.altloc else {""}
+    retained, miss_r = find_named_atoms(atoms, metal, cs["retained_atoms"], keep)
+    labile, miss_l = find_named_atoms(atoms, metal, cs.get("labile_atoms", []), keep)
+    report = {"metal": {"name": metal.name, "element": metal.element, "occ": metal.occ},
+              "selected": [f"{metal.name} (metal {metal.element})"],
+              "synthesized": [], "dropped": [], "warnings": []}
+    core = [metal]
+    for a in retained:
+        core.append(a)
+        report["selected"].append(f"{a.name} ({a.element}, {dist(a.xyz, metal.xyz):.2f} A, retained)")
+    for a in labile:
+        report["dropped"].append(f"{a.name} ({a.element}, {dist(a.xyz, metal.xyz):.2f} A, labile -> dropped)")
+    for k in miss_r:
+        report["warnings"].append(f"retained atom {k} NOT found")
+    for k in miss_l:
+        report["warnings"].append(f"labile atom {k} NOT found")
+
+    os_ = cs.get("open_site", {})
+    syn = os_.get("synthesize", "none")
+    if syn in ("hydride", "aqua"):
+        d = float(os_.get("dist", 1.6 if syn == "hydride" else 2.1))
+        if os_.get("along_from"):   # place along metal->(former labile leg) vector
+            legs, _ = find_named_atoms(atoms, metal, [os_["along_from"]], keep)
+            pos = synth_hydride(metal, legs[0], d) if legs else None
+        else:                        # place opposite the donor centroid (open coordination leg)
+            others = core[1:]
+            cx = (sum(a.x for a in others) / len(others),
+                  sum(a.y for a in others) / len(others),
+                  sum(a.z for a in others) / len(others)) if others else (metal.x, metal.y, metal.z)
+            v = normalize((metal.x - cx[0], metal.y - cx[1], metal.z - cx[2]))
+            pos = (metal.x + v[0]*d, metal.y + v[1]*d, metal.z + v[2]*d)
+        if pos:
+            el = "H" if syn == "hydride" else "O"
+            nm = os_.get("name", "H1" if syn == "hydride" else "O1")
+            core.append(Atom(99999, nm, "", "LIG", "L", 1, pos[0], pos[1], pos[2], 1.0, el, "HETATM"))
+            report["synthesized"].append(f"{nm} ({el}, synthesized {syn} at open site; inferred)")
+    return core, report
+
+
 def residue_atoms(atoms, chain, resseq, keep_alt):
     return [a for a in atoms if a.chain == chain and a.resseq == resseq
             and (not a.altloc or a.altloc in keep_alt)]
@@ -185,24 +258,34 @@ def residue_atoms(atoms, chain, resseq, keep_alt):
 
 def select_guideposts(atoms, core, spec, metal, n, scramble=False):
     """Pick the n candidate second-sphere residues whose sidechains come closest to the
-    reactive core, by deterministic distance. Anchor atoms = 3 sidechain heavies nearest
-    the core. scramble=True picks the FARTHEST (Rev3 'no-A_c' negative control)."""
+    reactive core (deterministic distance); anchor atoms = 3 sidechain heavies nearest the
+    core. scramble=True picks the FARTHEST (Rev3 no-A_c control). Candidates give resseq and
+    optionally chain / resname (key 'resname' or legacy 'name'); chain is matched flexibly
+    (nearest copy across chains) when omitted."""
     keep = {"", metal.altloc} if metal.altloc else {""}
     cands = spec.get("guideposts", {}).get("candidates", [])
     core_xyz = [a.xyz for a in core]
     scored = []
     for c in cands:
-        res = residue_atoms(atoms, c["chain"], c["resseq"], keep)
+        rname = c.get("resname") or c.get("name")
+        res = [a for a in atoms if a.record == "ATOM" and a.resseq == c["resseq"]
+               and ("chain" not in c or a.chain == c["chain"])
+               and (rname is None or a.resname == rname)
+               and (not a.altloc or a.altloc in keep)]
         if not res:
             continue
+        chains = {a.chain for a in res}
+        if len(chains) > 1:  # keep the chain copy nearest the core
+            best = min(chains, key=lambda ch: min(dist(a.xyz, cx) for a in res
+                                                  if a.chain == ch for cx in core_xyz))
+            res = [a for a in res if a.chain == best]
         heavies = [a for a in res if a.element != "H" and a.name not in BACKBONE]
         if not heavies:
             continue
-        # min distance from any sidechain heavy to any core atom
         pairs = [(min(dist(a.xyz, cx) for cx in core_xyz), a) for a in heavies]
         mind = min(p[0] for p in pairs)
         anchors = [a.name for _, a in sorted(pairs, key=lambda p: p[0])[:3]]
-        scored.append({"chain": c["chain"], "resseq": c["resseq"],
+        scored.append({"chain": res[0].chain, "resseq": c["resseq"],
                        "resname": res[0].resname, "role": c.get("role", ""),
                        "min_dist_to_core": round(mind, 2), "anchor_atoms": anchors,
                        "atoms": res})
@@ -304,10 +387,14 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
         fetch_pdb(pdb_id, pdb_path)
 
     atoms = parse_pdb(pdb_path)
-    csd = load_csd_cutoffs(audit_dir, pdb_id, metal_el)
-    metal = find_metal(atoms, resname, metal_el)
-    donors = first_sphere(atoms, metal, csd)   # real metal geometry drives detection
-    core, report = select_reactive_core(atoms, spec, metal, donors)
+    if "core_spec" in spec:                      # explicit mode (3WJC/5L8D/5OD5 etc.)
+        metal = find_metal_explicit(atoms, spec["core_spec"]["metal"])
+        core, report = select_reactive_core_explicit(atoms, spec["core_spec"], metal)
+    else:                                        # legacy Cp-autodetect mode (3ZP9)
+        csd = load_csd_cutoffs(audit_dir, pdb_id, metal_el)
+        metal = find_metal(atoms, resname, metal_el)
+        donors = first_sphere(atoms, metal, csd)
+        core, report = select_reactive_core(atoms, spec, metal, donors)
 
     # --- Rev3 negative controls (deliberately damaged trajectories) ---
     if control == "wrong_metal":

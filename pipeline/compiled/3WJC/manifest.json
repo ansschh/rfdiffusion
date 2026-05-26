@@ -1,0 +1,113 @@
+{
+  "pdb_id": "3WJC",
+  "tag": "3WJC",
+  "control": "none",
+  "strategy": "reactive_core_cp_body + nearest-contact guideposts",
+  "scaffold_length": 160,
+  "num_designs": 100,
+  "num_guideposts": 4,
+  "core_atoms": [
+    "RH",
+    "C3B",
+    "C4B",
+    "C5B",
+    "C6B",
+    "C7B"
+  ],
+  "guideposts": [
+    {
+      "chain": "A",
+      "resseq": 148,
+      "resname": "LEU",
+      "role": "hydrophobic wall",
+      "min_dist_to_core": 3.1,
+      "anchor_atoms": [
+        "CD1",
+        "CG",
+        "CD2"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 158,
+      "resname": "LEU",
+      "role": "hydrophobic wall",
+      "min_dist_to_core": 3.69,
+      "anchor_atoms": [
+        "CD2",
+        "CG",
+        "CD1"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 128,
+      "resname": "VAL",
+      "role": "hydrophobic wall",
+      "min_dist_to_core": 3.88,
+      "anchor_atoms": [
+        "CG2",
+        "CG1",
+        "CB"
+      ]
+    },
+    {
+      "chain": "A",
+      "resseq": 100,
+      "resname": "LEU",
+      "role": "hydrophobic wall (Cp-burying)",
+      "min_dist_to_core": 4.61,
+      "anchor_atoms": [
+        "CD1",
+        "CD2",
+        "CG"
+      ]
+    }
+  ],
+  "contig": "['32,A100-100,31,A128-128,31,A148-148,31,A158-158,31']",
+  "contig_atoms": "'{\\'A100\\':\\'CD1,CD2,CG\\',\\'A128\\':\\'CG2,CG1,CB\\',\\'A148\\':\\'CD1,CG,CD2\\',\\'A158\\':\\'CD2,CG,CD1\\'}'",
+  "ligand": "LIG",
+  "selection_report": {
+    "metal": {
+      "name": "RH",
+      "element": "RH",
+      "occ": 1.0
+    },
+    "selected": [
+      "RH (metal RH)",
+      "C3B (C, 2.26 A, retained)",
+      "C4B (C, 2.22 A, retained)",
+      "C5B (C, 2.19 A, retained)",
+      "C6B (C, 2.21 A, retained)",
+      "C7B (C, 2.19 A, retained)"
+    ],
+    "synthesized": [],
+    "dropped": [
+      "C1C (C, 1.91 A, labile -> dropped)",
+      "C4C (C, 1.97 A, labile -> dropped)",
+      "C5C (C, 2.12 A, labile -> dropped)",
+      "C8C (C, 2.01 A, labile -> dropped)"
+    ],
+    "warnings": []
+  },
+  "anchor": {
+    "type": "covalent maleimide-Cys96",
+    "treat_as": "diagnostic",
+    "fixed_in_motif": false
+  },
+  "substrate": {
+    "name": "phenylacetylene",
+    "present_in_crystal": false,
+    "place_in_v1": false
+  },
+  "rfd2_command": "rf_diffusion/run_inference.py --config-name=aa inference.deterministic=True inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt inference.input_pdb=$ARM/3WJC/motif.pdb inference.ligand=LIG contigmap.contigs=\"['32,A100-100,31,A128-128,31,A148-148,31,A158-158,31']\" inference.contig_as_guidepost=True contigmap.contig_atoms=\"'{\\'A100\\':\\'CD1,CD2,CG\\',\\'A128\\':\\'CG2,CG1,CB\\',\\'A148\\':\\'CD1,CG,CD2\\',\\'A158\\':\\'CD2,CG,CD1\\'}'\" inference.num_designs=100 inference.design_startnum=0 inference.output_prefix=$SCRATCH/RFdiffusion2/arm_designs/3WJC/3WJC_cond0 hydra.job_logging.root.level=WARN",
+  "verification": "audit/subQB_curation/extractions/3WJC/deterministic_checks.json",
+  "provenance": "Fukumoto/Hayashi ChemCatChem 2014 6 1229; reconciled GPT-5.5 + Claude",
+  "notes": [
+    "Active-site scaffolding (RFD2-native): guideposts + rigid cofactor ligand -> fresh fold.",
+    "Guideposts = nearest cofactor-contacting 2nd-sphere residues (by distance); NOT pocket reconstruction.",
+    "Cp* ring kept as rigid steric body; eta5 NOT encoded; labile Cl dropped; hydride synthesized (not crystallographic).",
+    "Anchor (dative-to-CA-II-Zn) = diagnostic, not fixed. Substrate/TS pose deferred (3ZP9 has no bound substrate; g-dd transferred, LOW conf).",
+    "$ARM = dir holding compiled/<id>/ on the cluster."
+  ]
+}
