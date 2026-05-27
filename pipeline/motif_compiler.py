@@ -29,7 +29,7 @@ Usage:
                                 [--scaffold-length 160] [--num-designs 100] [--guideposts N]
 """
 from __future__ import annotations
-import argparse, json, math, os, urllib.request
+import argparse, json, math, os, random, urllib.request
 from dataclasses import dataclass
 
 FALLBACK_CUTOFF = {"C": 2.40, "N": 2.55, "O": 2.65, "S": 2.85, "CL": 2.90, "P": 2.85}
@@ -256,12 +256,26 @@ def residue_atoms(atoms, chain, resseq, keep_alt):
             and (not a.altloc or a.altloc in keep_alt)]
 
 
-def select_guideposts(atoms, core, spec, metal, n, scramble=False):
-    """Pick the n candidate second-sphere residues whose sidechains come closest to the
-    reactive core (deterministic distance); anchor atoms = 3 sidechain heavies nearest the
-    core. scramble=True picks the FARTHEST (Rev3 no-A_c control). Candidates give resseq and
-    optionally chain / resname (key 'resname' or legacy 'name'); chain is matched flexibly
-    (nearest copy across chains) when omitted."""
+def _score_residue(res, core_xyz, role=""):
+    """Distance-to-core summary for one residue's atom list; anchors = 3 nearest sidechain heavies."""
+    heavies = [a for a in res if a.element != "H" and a.name not in BACKBONE]
+    if not heavies:
+        return None
+    pairs = [(min(dist(a.xyz, cx) for cx in core_xyz), a) for a in heavies]
+    mind = min(p[0] for p in pairs)
+    anchors = [a.name for _, a in sorted(pairs, key=lambda p: p[0])[:3]]
+    return {"chain": res[0].chain, "resseq": res[0].resseq, "resname": res[0].resname,
+            "role": role, "min_dist_to_core": round(mind, 2), "anchor_atoms": anchors, "atoms": res}
+
+
+def select_guideposts(atoms, core, spec, metal, n, scramble=False, random_mode=False, seed=0):
+    """Pick the n second-sphere residues whose sidechains come closest to the reactive core
+    (deterministic distance); anchor atoms = 3 sidechain heavies nearest the core.
+      scramble=True     -> FARTHEST candidates (Rev3 no-A_c proxy).
+      random_mode=True  -> RANDOM residues drawn from the whole protein within the SAME
+                           distance band as the real nearest-n, excluding them (leakage control:
+                           controls for distance, randomizes residue identity — tests whether the
+                           specific affordance residues matter or just having fixed fragments)."""
     keep = {"", metal.altloc} if metal.altloc else {""}
     cands = spec.get("guideposts", {}).get("candidates", [])
     core_xyz = [a.xyz for a in core]
@@ -279,18 +293,35 @@ def select_guideposts(atoms, core, spec, metal, n, scramble=False):
             best = min(chains, key=lambda ch: min(dist(a.xyz, cx) for a in res
                                                   if a.chain == ch for cx in core_xyz))
             res = [a for a in res if a.chain == best]
-        heavies = [a for a in res if a.element != "H" and a.name not in BACKBONE]
-        if not heavies:
-            continue
-        pairs = [(min(dist(a.xyz, cx) for cx in core_xyz), a) for a in heavies]
-        mind = min(p[0] for p in pairs)
-        anchors = [a.name for _, a in sorted(pairs, key=lambda p: p[0])[:3]]
-        scored.append({"chain": res[0].chain, "resseq": c["resseq"],
-                       "resname": res[0].resname, "role": c.get("role", ""),
-                       "min_dist_to_core": round(mind, 2), "anchor_atoms": anchors,
-                       "atoms": res})
+        g = _score_residue(res, core_xyz, c.get("role", ""))
+        if g:
+            scored.append(g)
     scored.sort(key=lambda g: g["min_dist_to_core"], reverse=scramble)
-    return scored[:n]
+
+    if not random_mode:
+        return scored[:n]
+
+    # "near shell" band, padded so a real pool exists but still nearer than the scramble (farthest)
+    # control: from ~1 A inside the closest real guidepost to ~2 A beyond the n-th.
+    real = sorted(scored, key=lambda g: g["min_dist_to_core"])[:n]
+    lo = max(2.5, (real[0]["min_dist_to_core"] if real else 3.5) - 1.0)
+    hi = (real[-1]["min_dist_to_core"] if real else 6.0) + 2.0
+    real_keys = {(g["chain"], g["resseq"]) for g in real}
+    by_res = {}
+    for a in atoms:
+        if a.record == "ATOM" and (not a.altloc or a.altloc in keep):
+            by_res.setdefault((a.chain, a.resseq), []).append(a)
+    pool = []
+    for key, res in by_res.items():
+        if key in real_keys:
+            continue
+        g = _score_residue(res, core_xyz)
+        if g and lo <= g["min_dist_to_core"] <= hi:
+            g["role"] = "random-near-distance leakage control"
+            pool.append(g)
+    if not pool:
+        raise SystemExit("random_guideposts: no residues found in the real guidepost distance band")
+    return random.Random(seed).sample(pool, min(n, len(pool)))
 
 
 def build_contig(guideposts, total_len):
@@ -403,11 +434,15 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
         report["control"] = f"wrong_metal: {metal_el}->{WRONG_METAL_SWAP} (geometry unchanged)"
     elif control == "scramble_guideposts":
         report["control"] = "scramble_guideposts: farthest contacts (no-A_c proxy)"
+    elif control == "random_guideposts":
+        report["control"] = "random_guideposts: random residues in the real guidepost distance band (leakage control)"
     elif control != "none":
         raise SystemExit(f"unknown control '{control}'")
 
     guideposts = select_guideposts(atoms, core, spec, metal, num_guideposts,
-                                   scramble=(control == "scramble_guideposts"))
+                                   scramble=(control == "scramble_guideposts"),
+                                   random_mode=(control == "random_guideposts"),
+                                   seed=sum(ord(c) for c in pdb_id))
     if not guideposts:
         raise SystemExit("no guidepost residues resolved — check guideposts.candidates")
 
@@ -461,7 +496,7 @@ def main():
     ap.add_argument("--num-designs", type=int, default=None)
     ap.add_argument("--guideposts", type=int, default=None)
     ap.add_argument("--control", default="none",
-                    choices=["none", "wrong_metal", "scramble_guideposts"])
+                    choices=["none", "wrong_metal", "scramble_guideposts", "random_guideposts"])
     a = ap.parse_args()
     targets = json.load(open(a.targets))
     if a.pdb_id not in targets["targets"]:
