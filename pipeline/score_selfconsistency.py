@@ -166,7 +166,7 @@ def main():
             name = os.path.basename(pd)
             if "__s" not in name:
                 continue
-            did = name.split("__s")[0]
+            did = name.rsplit("__s", 1)[0]   # rsplit: the target tag itself can contain "__s" (e.g. 3ZP9__scramble_guideposts)
             cif = glob.glob(os.path.join(pd, "*_model_0.cif"))
             conf = glob.glob(os.path.join(pd, "confidence_*_model_0.json"))
             if cif:
