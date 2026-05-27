@@ -51,14 +51,20 @@ mkdir -p "$OUTDIR"
 
 cd "$RFD2" || exit 1
 export PYTHONPATH="$PWD"
-SANDBOX="rf_diffusion/exec/bakerlab_rf_diffusion_aa_sandbox"
+# Use the extracted sandbox dir, NOT the .sif: the .sif's rootfs is lz4-compressed squashfs and
+# these nodes' kernels can't mount lz4 ("bad superblock") — direct `apptainer exec image.sif` fails.
+# unsquashfs (used by `apptainer build --sandbox`) handles lz4 in userspace, so the sandbox works.
+# If the sandbox is empty/missing /bin (an interrupted re-extract), rebuild it:
+#   apptainer build --sandbox <this_path> rf_diffusion/exec/bakerlab_rf_diffusion_aa.sif
+IMG="rf_diffusion/exec/bakerlab_rf_diffusion_aa_sandbox"
+[ -e "$IMG/bin/sh" ] || { echo "ERROR: sandbox $RFD2/$IMG missing/corrupt — re-extract from the .sif"; exit 1; }
 
 echo "=== $(hostname) | array task $TASK | designs $START..$((START+PER-1)) | TARGET=$TARGET ==="
 nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader
 
 apptainer exec --nv -B /resnick --home "$RFD2HOME" \
   --env DGLBACKEND=pytorch --env MKL_THREADING_LAYER=GNU --env MKL_SERVICE_FORCE_INTEL=1 \
-  "$SANDBOX" \
+  "$IMG" \
   rf_diffusion/run_inference.py --config-name=aa \
     inference.deterministic=True \
     inference.ckpt_path=REPO_ROOT/rf_diffusion/model_weights/RFD_173.pt \
@@ -67,5 +73,7 @@ apptainer exec --nv -B /resnick --home "$RFD2HOME" \
     contigmap.contig_atoms="$CONTIG_ATOMS" \
     inference.num_designs="$PER" inference.design_startnum="$START" \
     inference.output_prefix="$OUTPREF" hydra.job_logging.root.level=WARN
-echo "=== task $TASK exit $? ==="
+rc=$?
+echo "=== task $TASK exit $rc ==="
 echo "designs so far in $OUTDIR: $(find "$OUTDIR" -maxdepth 1 -name '*-atomized-bb-False.pdb' | wc -l)"
+exit $rc   # propagate the real exit code so a container failure isn't masked as COMPLETED 0:0
