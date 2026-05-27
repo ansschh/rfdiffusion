@@ -30,6 +30,12 @@ SCORES="$DESIGNDIR/scores.json"
 WORK="$SCRATCH/selfconsist/$TARGET"
 rm -rf "$WORK/inputs" "$WORK/folds"; mkdir -p "$WORK/designs" "$WORK/inputs" "$WORK/folds" "$WORK/lmpnn"
 CKPT="$(ls "$LMPNN"/model_params/ligandmpnn_v_*.pt 2>/dev/null | head -1)"
+# Metal-aware layer-2 (Rev2 crit-1 / Rev3): co-fold the catalytic metal ION so a wrong-metal
+# trajectory can be told apart. Element = core_atoms[0] of the compiled manifest (IR for 3ZP9,
+# ZN for the wrong_metal control). Override with METAL='' to fold protein-only (old behaviour).
+MANIFEST="$REPO/pipeline/compiled/$TARGET/manifest.json"
+METAL="${METAL-$(python3 -c "import json;print(json.load(open('$MANIFEST'))['core_atoms'][0])" 2>/dev/null || echo '')}"
+echo "co-folding metal ion: ${METAL:-<none, protein-only>}"
 
 TOP="$(python3 -c "
 import json
@@ -49,17 +55,20 @@ for f in $TOP; do
   python run.py --model_type ligand_mpnn --checkpoint_ligand_mpnn "$CKPT" \
     --pdb_path "$WORK/designs/$d.pdb" --out_folder "$WORK/lmpnn/$d" \
     --number_of_batches "$NSEQ" --batch_size 1 --temperature 0.1 || { echo "lmpnn failed for $d"; continue; }
-  python3 - "$WORK/lmpnn/$d" "$d" "$WORK/inputs" <<'PY'
+  python3 - "$WORK/lmpnn/$d" "$d" "$WORK/inputs" "$METAL" <<'PY'
 import sys, glob, os
 lmdir, did, inp = sys.argv[1:4]
+metal = sys.argv[4] if len(sys.argv) > 4 else ""
 fa = (glob.glob(os.path.join(lmdir, "seqs", "*.fa")) or glob.glob(os.path.join(lmdir, "seqs", "*.fasta")))[0]
 recs = open(fa).read().split(">")[1:]
 seqs = [''.join(c for c in r.split(chr(10), 1)[1] if c.isalpha()) for r in recs[1:]]  # [0]=native
 for i, s in enumerate(seqs):
     if s:
-        open(os.path.join(inp, f"{did}__s{i}.yaml"), "w").write(
-            "sequences:\n  - protein:\n      id: A\n      sequence: %s\n      msa: empty\n" % s)
-print(f"  {did}: wrote {sum(1 for s in seqs if s)} seqs")
+        y = "sequences:\n  - protein:\n      id: A\n      sequence: %s\n      msa: empty\n" % s
+        if metal:   # co-fold the catalytic metal ion (CCD code = element) so wrong_metal can separate
+            y += "  - ligand:\n      id: M\n      ccd: %s\n" % metal
+        open(os.path.join(inp, f"{did}__s{i}.yaml"), "w").write(y)
+print(f"  {did}: wrote {sum(1 for s in seqs if s)} seqs" + (f" + {metal} ion" if metal else ""))
 PY
 done
 deactivate

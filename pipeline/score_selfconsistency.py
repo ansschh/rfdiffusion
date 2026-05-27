@@ -23,6 +23,8 @@ import numpy as np
 
 RMSD_PASS = 2.0
 PLDDT_PASS = 0.70
+METAL_POSE_PASS = 2.0   # Rev2 crit-1: metal placed within 2.0 A of the design site (after CA fit)
+METALS = {"IR", "ZN", "RH", "RU", "FE", "MN", "CU", "CO", "NI", "PD", "PT", "MO", "W", "OS", "V", "CR"}
 
 
 def pdb_ca(path):
@@ -118,6 +120,75 @@ def kabsch_rmsd(P, Q):
     return float(np.sqrt(((Pr - Qc) ** 2).sum() / n)), n
 
 
+def kabsch_fit(P, Q):
+    """Like kabsch_rmsd but also returns the rigid map. R, Pm, Qm satisfy (P-Pm)@R ~= (Q-Qm),
+    so a PRED-frame point q maps into the DESIGN frame via (q-Qm)@R.T + Pm."""
+    n = min(len(P), len(Q))
+    if n == 0:
+        return None, None, None, None, 0
+    P, Q = P[:n], Q[:n]
+    Pm, Qm = P.mean(0), Q.mean(0)
+    Pc, Qc = P - Pm, Q - Qm
+    V, S, Wt = np.linalg.svd(Pc.T @ Qc)
+    d = np.sign(np.linalg.det(V @ Wt))
+    R = V @ np.diag([1, 1, d]) @ Wt
+    rmsd = float(np.sqrt(((Pc @ R - Qc) ** 2).sum() / n))
+    return rmsd, R, Pm, Qm, n
+
+
+def metal_from_pdb(path):
+    """Coordinates of the (first) catalytic metal heavy atom in an RFD2 design PDB."""
+    for line in open(path):
+        if line[:6].strip() not in ("ATOM", "HETATM"):
+            continue
+        name = line[12:16].strip()
+        el = line[76:78].strip().upper() or "".join(c for c in name if c.isalpha())[:2].upper()
+        if el in METALS:
+            try:
+                return np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])])
+            except ValueError:
+                pass
+    return None
+
+
+def metal_from_cif(path):
+    """Coordinates of the (first) metal atom in a Boltz mmCIF fold (biopython, manual fallback)."""
+    try:
+        from Bio.PDB import MMCIFParser
+        s = MMCIFParser(QUIET=True).get_structure("x", path)
+        for model in s:
+            for chain in model:
+                for res in chain:
+                    for atom in res:
+                        if (atom.element or "").upper() in METALS:
+                            c = atom.coord
+                            return np.array([float(c[0]), float(c[1]), float(c[2])])
+            break
+    except Exception:
+        pass
+    # manual: scan _atom_site for a type_symbol in METALS
+    cols, in_loop = [], False
+    try:
+        for line in open(path):
+            t = line.strip()
+            if t == "loop_":
+                cols, in_loop = [], True; continue
+            if in_loop and t.startswith("_atom_site."):
+                cols.append(t.split(".", 1)[1]); continue
+            if cols and t and not t.startswith("_") and not t.startswith("#"):
+                r = t.split()
+                if len(r) < len(cols):
+                    continue
+                idx = {c: i for i, c in enumerate(cols)}
+                if "type_symbol" not in idx:
+                    return None
+                if r[idx["type_symbol"]].strip('"').upper() in METALS:
+                    return np.array([float(r[idx["Cartn_x"]]), float(r[idx["Cartn_y"]]), float(r[idx["Cartn_z"]])])
+    except Exception:
+        pass
+    return None
+
+
 def read_plddt(conf_path):
     if not conf_path or not os.path.isfile(conf_path):
         return {}
@@ -177,31 +248,47 @@ def main():
             if not os.path.isfile(dpdb):
                 continue
             P = pdb_ca(dpdb)
+            dmetal = metal_from_pdb(dpdb)        # design metal site (if the cofactor metal is present)
             seqres = []
             for cif, conf in folds:
-                r, _ = kabsch_rmsd(P, cif_ca(cif))
+                r, R, Pm, Qm, _ = kabsch_fit(P, cif_ca(cif))
+                md = None                        # metal-site displacement after CA superposition
+                if dmetal is not None and R is not None:
+                    qm = metal_from_cif(cif)
+                    if qm is not None:
+                        md = float(np.linalg.norm((qm - Qm) @ R.T + Pm - dmetal))
                 seqres.append({"ca_rmsd": round(r, 3) if r is not None else None,
-                               "plddt": read_plddt(conf).get("complex_plddt")})
+                               "plddt": read_plddt(conf).get("complex_plddt"),
+                               "metal_disp": round(md, 3) if md is not None else None})
             best_rmsd = min((s["ca_rmsd"] for s in seqres if s["ca_rmsd"] is not None), default=None)
             best_plddt = max((s["plddt"] for s in seqres if s["plddt"] is not None), default=None)
+            best_md = min((s["metal_disp"] for s in seqres if s["metal_disp"] is not None), default=None)
             passed = any(s["ca_rmsd"] is not None and s["ca_rmsd"] <= RMSD_PASS
                          and s["plddt"] is not None and s["plddt"] >= PLDDT_PASS for s in seqres)
             rows.append({"design": did, "n_seqs": len(seqres), "best_ca_rmsd": best_rmsd,
                          "best_plddt": round(best_plddt, 3) if best_plddt is not None else None,
-                         "self_consistent": passed})
+                         "best_metal_disp": best_md, "self_consistent": passed})
         if not rows:
             raise SystemExit(f"no scorable designs under {base} (need designs/*.pdb + folds/**/predictions/*__s*)")
         ok = [r for r in rows if r["self_consistent"]]
         rmsds = sorted(r["best_ca_rmsd"] for r in rows if r["best_ca_rmsd"] is not None)
+        mds = sorted(r["best_metal_disp"] for r in rows if r["best_metal_disp"] is not None)
         summary = {"target": os.path.basename(os.path.normpath(base)), "n_designs": len(rows),
                    "n_self_consistent": len(ok), "frac_self_consistent": round(len(ok)/len(rows), 3),
                    "best_ca_rmsd_overall": rmsds[0] if rmsds else None,
-                   "median_best_ca_rmsd": rmsds[len(rmsds)//2] if rmsds else None}
+                   "median_best_ca_rmsd": rmsds[len(rmsds)//2] if rmsds else None,
+                   # metal-site (Rev2 crit-1): only populated when the metal was co-folded
+                   "n_metal_found": len(mds),
+                   "best_metal_disp_overall": mds[0] if mds else None,
+                   "median_best_metal_disp": mds[len(mds)//2] if mds else None,
+                   "n_metal_site_within_2A": sum(1 for r in rows if r["best_metal_disp"] is not None
+                                                 and r["best_metal_disp"] <= METAL_POSE_PASS)}
         json.dump({"summary": summary, "designs": rows}, open(os.path.join(base, "scores_sc.json"), "w"), indent=2)
         print(f"=== layer-2 self-consistency (best-of-N): {summary['target']} ===")
         for r in rows:
             print(f"  {r['design']}: best_rmsd={r['best_ca_rmsd']} best_plddt={r['best_plddt']} "
-                  f"n_seqs={r['n_seqs']} -> {'PASS' if r['self_consistent'] else 'no'}")
+                  f"best_metal_disp={r['best_metal_disp']} n_seqs={r['n_seqs']} "
+                  f"-> {'PASS' if r['self_consistent'] else 'no'}")
         for k, v in summary.items():
             print(f"  {k}: {v}")
         return
