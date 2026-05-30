@@ -403,9 +403,34 @@ def build_rfd2_command(motif_pdb, lig_resname, contig, contig_atoms, out_prefix,
 WRONG_METAL_SWAP = "ZN"  # Rev3: swap Ir->Zn keeping geometry (tests metal-identity sensitivity)
 
 
+def load_external_guideposts(path, core, n_anchor=3):
+    """Load transplanted guideposts from a JSON (e.g., output of transplant_pocket.py).
+    Each entry: {chain, resseq, resname, atoms: [{name, element, x, y, z}], ...}.
+    Computes min_dist_to_core + 3 nearest anchor atoms, returns in the same shape as
+    select_guideposts so the rest of compile_target works unchanged."""
+    data = json.load(open(path))
+    raw = data.get("transplanted_guideposts") or data.get("guideposts") or []
+    core_xyz = [a.xyz for a in core]
+    out = []
+    for r in raw:
+        atoms = [Atom(0, a["name"], "", r["resname"], r["chain"], r["resseq"],
+                      float(a["x"]), float(a["y"]), float(a["z"]), 1.0, a["element"], "ATOM") for a in r["atoms"]]
+        heavies = [a for a in atoms if a.element != "H" and a.name not in BACKBONE]
+        if not heavies:
+            continue
+        pairs = [(min(dist(a.xyz, cx) for cx in core_xyz), a) for a in heavies]
+        mind = min(p[0] for p in pairs)
+        anchors = [a.name for _, a in sorted(pairs, key=lambda p: p[0])[:n_anchor]]
+        out.append({"chain": r["chain"], "resseq": r["resseq"], "resname": r["resname"],
+                    "role": f"transplanted from {data.get('candidate_source', '?')}/{r.get('source_residue', '?')}",
+                    "min_dist_to_core": round(mind, 2),
+                    "anchor_atoms": anchors, "atoms": atoms})
+    return out, data.get("candidate_source", "external")
+
+
 def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
                    scaffold_length=None, num_designs=None, num_guideposts=None,
-                   control="none"):
+                   control="none", external_guideposts=None):
     spec = targets["targets"][pdb_id]
     metal_el, resname = spec["catalytic_metal"]["element"], spec["cofactor_resname"]
     scaffold_length = scaffold_length or spec["design"]["scaffold_length"]
@@ -469,17 +494,27 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
     elif control != "none":
         raise SystemExit(f"unknown control '{control}'")
 
-    guideposts = select_guideposts(atoms, core, spec, metal, num_guideposts,
-                                   scramble=(control == "scramble_guideposts"),
-                                   random_mode=(control == "random_guideposts"),
-                                   seed=sum(ord(c) for c in pdb_id))
-    if not guideposts:
-        raise SystemExit("no guidepost residues resolved — check guideposts.candidates")
+    external_source = None
+    if external_guideposts:
+        guideposts, external_source = load_external_guideposts(external_guideposts, core)
+        if not guideposts:
+            raise SystemExit(f"no transplanted guideposts loaded from {external_guideposts}")
+        report["external_guideposts"] = f"loaded {len(guideposts)} transplanted residues from {external_source}"
+    else:
+        guideposts = select_guideposts(atoms, core, spec, metal, num_guideposts,
+                                       scramble=(control == "scramble_guideposts"),
+                                       random_mode=(control == "random_guideposts"),
+                                       seed=sum(ord(c) for c in pdb_id))
+        if not guideposts:
+            raise SystemExit("no guidepost residues resolved — check guideposts.candidates")
 
     contig = build_contig(guideposts, scaffold_length)
     contig_atoms = build_contig_atoms(guideposts)
 
-    tag = pdb_id if control == "none" else f"{pdb_id}__{control}"
+    if external_source:
+        tag = f"{pdb_id}__from_{external_source}"
+    else:
+        tag = pdb_id if control == "none" else f"{pdb_id}__{control}"
     out_dir = os.path.join(out_root, tag)
     os.makedirs(out_dir, exist_ok=True)
     write_motif_pdb(core, guideposts, os.path.join(out_dir, "motif.pdb"))
@@ -528,12 +563,16 @@ def main():
     ap.add_argument("--control", default="none",
                     choices=["none", "wrong_metal", "scramble_guideposts", "random_guideposts",
                              "block_open_site", "remove_hydride", "wrong_hapticity"])
+    ap.add_argument("--external-guideposts",
+                    help="JSON of transplanted guideposts (from transplant_pocket.py). "
+                         "Replaces curated guideposts; tag becomes <pdb_id>__from_<source>.")
     a = ap.parse_args()
     targets = json.load(open(a.targets))
     if a.pdb_id not in targets["targets"]:
         raise SystemExit(f"{a.pdb_id} not in {a.targets}")
     out_dir, m = compile_target(a.pdb_id, targets, a.audit, a.pdb_dir, a.out,
-                                a.scaffold_length, a.num_designs, a.guideposts, a.control)
+                                a.scaffold_length, a.num_designs, a.guideposts, a.control,
+                                external_guideposts=a.external_guideposts)
     r = m["selection_report"]
     if m["control"] != "none":
         print(f"*** NEGATIVE CONTROL: {r.get('control')} ***")
