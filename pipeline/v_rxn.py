@@ -97,33 +97,36 @@ def count_cone_blockers(metal, open_atom, atoms, half_angle_deg, cone_beyond):
     return len(blockers), blockers
 
 
-def score_design(path, params):
-    atoms = parse_design(path)
-    metal = find_metal(atoms)
-    if not metal:
-        return {"file": os.path.basename(path), "G_access": {"pass": False, "reason": "no metal found"}, "all_pass": False}
-    open_atom, mh = find_open_atom(metal, atoms, element="H")
-    if not open_atom:
-        return {"file": os.path.basename(path), "metal": metal[2],
-                "G_access": {"pass": False, "reason": "no hydride at open site (required for ATH V_rxn)"},
-                "all_pass": False}
-    lo, hi = params["mh_dist_band"]
-    if not (lo <= mh <= hi):
-        return {"file": os.path.basename(path), "metal": metal[2], "mh_dist": round(mh, 3),
-                "G_access": {"pass": False, "reason": f"metal-H distance {round(mh,3)} A outside band [{lo},{hi}]"},
-                "all_pass": False}
-    n_block, blockers = count_cone_blockers(metal, open_atom, atoms,
+def resolve_motif_pdb(d):
+    """Find the canonical motif.pdb for a target — V_rxn reads it for the catalytic-metal
+    and hydride positions, because RFD2 strips H atoms from its design output."""
+    tag = os.path.basename(os.path.normpath(d))
+    here = os.path.dirname(os.path.abspath(__file__))
+    for c in (os.path.join(d, "motif.pdb"),
+              os.path.join(os.environ.get("REPO_DIR", "/resnick/scratch/atiwari2/rfdiffusion"),
+                           "pipeline/compiled", tag, "motif.pdb"),
+              os.path.join(here, "compiled", tag, "motif.pdb"),
+              os.path.join(here, "..", "pipeline/compiled", tag, "motif.pdb")):
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def score_design_with_motif(design_path, motif_metal, motif_open, mh_dist, params):
+    """Use motif's metal+hydride positions; count blockers in the design's atom list."""
+    atoms = parse_design(design_path)
+    n_block, blockers = count_cone_blockers(motif_metal, motif_open, atoms,
                                             params["half_angle_deg"], params["cone_beyond"])
     if n_block <= params["max_blockers_pass"]:
         ga = {"pass": True, "n_cone_blockers": n_block, "blockers": blockers}
     else:
         ga = {"pass": False, "n_cone_blockers": n_block, "blockers": blockers,
               "reason": f"{n_block} heavy atom(s) inside substrate-approach cone"}
-    return {"file": os.path.basename(path), "metal": metal[2],
-            "mh_dist": round(mh, 3), "G_access": ga, "all_pass": ga["pass"]}
+    return {"file": os.path.basename(design_path), "mh_dist_motif": round(mh_dist, 3),
+            "G_access": ga, "all_pass": ga["pass"]}
 
 
-def list_pdbs(d):
+def list_design_pdbs(d):
     pdbs = sorted(p for p in glob.glob(os.path.join(d, "*-atomized-bb-False.pdb"))
                   if "/unidealized/" not in p.replace("\\", "/"))
     if not pdbs:
@@ -163,7 +166,21 @@ def main():
 
     def score_dir(d):
         tag = os.path.basename(os.path.normpath(d))
-        scores = [score_design(p, params) for p in list_pdbs(d)]
+        motif_path = resolve_motif_pdb(d)
+        if not motif_path:
+            return tag, [{"file": "motif", "G_access": {"pass": False, "reason": "motif.pdb not found"}, "all_pass": False}]
+        motif_atoms = parse_design(motif_path)
+        motif_metal = find_metal(motif_atoms)
+        if not motif_metal:
+            return tag, [{"file": "motif", "G_access": {"pass": False, "reason": "no metal in motif"}, "all_pass": False}]
+        motif_open, mh = find_open_atom(motif_metal, motif_atoms, element="H")
+        if not motif_open:
+            return tag, [{"file": "motif", "G_access": {"pass": False, "reason": "no hydride in motif (use on hydride-bearing ATH target)"}, "all_pass": False}]
+        lo, hi = params["mh_dist_band"]
+        if not (lo <= mh <= hi):
+            return tag, [{"file": "motif", "G_access": {"pass": False, "reason": f"motif metal-H distance {round(mh,3)} A outside band [{lo},{hi}]"}, "all_pass": False}]
+        design_pdbs = list_design_pdbs(d) or [motif_path]
+        scores = [score_design_with_motif(p, motif_metal, motif_open, mh, params) for p in design_pdbs]
         return tag, scores
 
     if args.compare:

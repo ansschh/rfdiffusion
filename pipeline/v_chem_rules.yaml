@@ -29,8 +29,10 @@ templates:
         - {type: eta5_cp, n_carbons: 5, mc_dist_band: [1.95, 2.35], mc_spread_max: 0.25}
         - {type: kappa_n_n, n_donors: 2, donor_element: N}
     active_species:
-      required_elements: [H]       # hydride present
-      open_site_required: true     # coordination sphere has room for substrate (deferred to V_rxn)
+      # Hydride presence is checked by V_rxn (reads the canonical motif.pdb), not V_chem,
+      # because RFD2 strips H atoms from its design output. V_chem scores the rigid motif
+      # only — the cofactor is identical across all 100 designs of a given target.
+      open_site_required: true     # deferred to V_rxn (G_access)
     forbidden_metals: [ZN, MG, CA, NA, K, AL]   # d10 / s-block / hard-Lewis-acid: no eta5-Cp organometallics
     notes: "Wrong-metal Ir->Zn trips (G_metal: element != IR) AND (G_hapticity: ZN in forbidden_metals) AND (G_coord: Zn-C distances 2.1-2.2 Å outside any reasonable Zn-C band)."
 

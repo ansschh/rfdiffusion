@@ -185,14 +185,22 @@ def summarize(target, scores, template_name):
     }
 
 
-def list_pdbs(d):
-    pdbs = sorted(p for p in glob.glob(os.path.join(d, "*-atomized-bb-False.pdb"))
-                  if "/unidealized/" not in p.replace("\\", "/"))
-    if not pdbs:
-        m = os.path.join(d, "motif.pdb")
-        if os.path.isfile(m):
-            pdbs = [m]
-    return pdbs
+def resolve_motif_pdb(d):
+    """Find canonical motif.pdb for a target. Accepts either a compiled-motif dir or a
+    design dir. V_chem ALWAYS scores the motif (not RFD2 designs) because the cofactor is
+    rigid and identical across all 100 designs of a target; and because RFD2 strips H atoms
+    from its output so the design PDB can't be used to check hydride/active-state.
+    """
+    tag = os.path.basename(os.path.normpath(d))
+    here = os.path.dirname(os.path.abspath(__file__))
+    for c in (os.path.join(d, "motif.pdb"),
+              os.path.join(os.environ.get("REPO_DIR", "/resnick/scratch/atiwari2/rfdiffusion"),
+                           "pipeline/compiled", tag, "motif.pdb"),
+              os.path.join(here, "compiled", tag, "motif.pdb"),
+              os.path.join(here, "..", "pipeline/compiled", tag, "motif.pdb")):
+        if os.path.isfile(c):
+            return c
+    return None
 
 
 def main():
@@ -200,7 +208,7 @@ def main():
     ap.add_argument("design_dir", nargs="?")
     ap.add_argument("--rules", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "v_chem_rules.yaml"))
     ap.add_argument("--out")
-    ap.add_argument("--compare", nargs="+", help="multiple design dirs — tabulate gate-pass fractions")
+    ap.add_argument("--compare", nargs="+", help="multiple design or compiled-motif dirs — tabulate gate-pass per target")
     args = ap.parse_args()
 
     rules = yaml.safe_load(open(args.rules))
@@ -212,7 +220,11 @@ def main():
         tname = mapping.get(tag)
         if not tname:
             raise SystemExit(f"no template mapping for target tag '{tag}' in {args.rules}")
-        scores = [score_design(p, templates[tname]) for p in list_pdbs(d)]
+        motif = resolve_motif_pdb(d)
+        if not motif:
+            raise SystemExit(f"motif.pdb not found for '{tag}' — looked in {d}, "
+                             f"$REPO_DIR/pipeline/compiled/{tag}/, and pipeline/compiled/{tag}/")
+        scores = [score_design(motif, templates[tname])]
         return tag, tname, scores
 
     if args.compare:
