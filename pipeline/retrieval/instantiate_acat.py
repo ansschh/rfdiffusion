@@ -90,7 +90,70 @@ def world_to_local(p, origin, R):
     return [round(R[i][0]*rel[0] + R[i][1]*rel[1] + R[i][2]*rel[2], 3) for i in range(3)]
 
 
-def build_a_cat(target_dir, target_id):
+def derive_a_contact_chem(cofactor_local):
+    """Chemistry-rule A_contact: derive Gaussians from COFACTOR GEOMETRY ALONE — no PDB residue coords.
+
+    Rules (textbook-grounded, DRAFT — chemist calibration recommended):
+      1. Cp/Cp* ring (5 C atoms at tight similar distance from metal): one hydrophobic
+         Gaussian 3.5 A beyond the ring centroid, outward from metal.
+      2. Each retained N donor: one polar Gaussian 3.0 A beyond, outward from metal.
+      3. Each retained O donor (excluding cofactor-internal): one polar Gaussian, same.
+
+    Sigma 1.5 A, w 1.0 (hydrophobic ring) / 0.7 (per-donor). No information from observed
+    pocket residue coordinates is used — this is the non-oracle counterpart of the
+    guidepost-derived A_contact.
+    """
+    a_contact = []
+
+    # Rule 1: Cp/Cp* ring detection
+    carbons = [c for c in cofactor_local if c["element"] == "C"]
+    if len(carbons) >= 5:
+        sorted_by_dist = sorted(carbons, key=lambda c: math.sqrt(sum(x*x for x in c["pos_local"])))
+        ring = sorted_by_dist[:5]
+        dists = [math.sqrt(sum(x*x for x in c["pos_local"])) for c in ring]
+        spread = max(dists) - min(dists)
+        if spread < 0.5:    # tight ring
+            cx = sum(c["pos_local"][0] for c in ring) / 5
+            cy = sum(c["pos_local"][1] for c in ring) / 5
+            cz = sum(c["pos_local"][2] for c in ring) / 5
+            cnorm = math.sqrt(cx*cx + cy*cy + cz*cz)
+            if cnorm > 0.01:
+                pos = [round(cx + 3.5 * cx/cnorm, 3),
+                       round(cy + 3.5 * cy/cnorm, 3),
+                       round(cz + 3.5 * cz/cnorm, 3)]
+                a_contact.append({
+                    "type": "hydrophobic", "mu_local": pos, "Sigma_diag": [1.5, 1.5, 1.5], "w": 1.0,
+                    "source_rule": f"Cp-ring face: 5 C at {round(sum(dists)/5, 2)} A (spread {round(spread, 2)})",
+                })
+
+    # Rule 2: N donors -> polar Gaussian outward
+    for c in cofactor_local:
+        if c["element"] == "N":
+            x, y, z = c["pos_local"]
+            n = math.sqrt(x*x + y*y + z*z)
+            if n > 0.5:
+                pos = [round(x + 3.0 * x/n, 3), round(y + 3.0 * y/n, 3), round(z + 3.0 * z/n, 3)]
+                a_contact.append({
+                    "type": "polar", "mu_local": pos, "Sigma_diag": [1.5, 1.5, 1.5], "w": 0.7,
+                    "source_rule": f"polar partner for N donor {c['name']}",
+                })
+
+    # Rule 3: O donors -> polar Gaussian outward
+    for c in cofactor_local:
+        if c["element"] == "O":
+            x, y, z = c["pos_local"]
+            n = math.sqrt(x*x + y*y + z*z)
+            if n > 0.5:
+                pos = [round(x + 3.0 * x/n, 3), round(y + 3.0 * y/n, 3), round(z + 3.0 * z/n, 3)]
+                a_contact.append({
+                    "type": "polar", "mu_local": pos, "Sigma_diag": [1.5, 1.5, 1.5], "w": 0.7,
+                    "source_rule": f"polar partner for O donor {c['name']}",
+                })
+
+    return a_contact
+
+
+def build_a_cat(target_dir, target_id, mode="oracle"):
     atoms = parse_pdb(os.path.join(target_dir, "motif.pdb"))
     manifest = json.load(open(os.path.join(target_dir, "manifest.json")))
     origin, R, metal, open_atom = compute_frame(atoms)
@@ -114,41 +177,46 @@ def build_a_cat(target_dir, target_id):
                   "content_type": "substrate_reactive_atom",
                   "expected_M_substrate_A": [2.5, 3.5]}
 
-    # Data-driven A_contact: one typed Gaussian per curated guidepost residue, centered at
-    # its sidechain centroid in the local frame (tight Sigma). Type from residue identity.
-    # The target's own pocket becomes the natural high-score; foreign pockets only score if
-    # they have the right residue TYPE at the right local POSITION.
-    RESIDUE_TYPE = {
-        "ALA":"hydrophobic","VAL":"hydrophobic","LEU":"hydrophobic","ILE":"hydrophobic",
-        "MET":"hydrophobic","PRO":"hydrophobic","GLY":"small",
-        "PHE":"aromatic","TYR":"aromatic","TRP":"aromatic",
-        "SER":"polar","THR":"polar","ASN":"polar","GLN":"polar","CYS":"polar",
-        "HIS":"anchor","LYS":"charged_base","ARG":"charged_base",
-        "ASP":"charged_acid","GLU":"charged_acid",
-    }
-    BACKBONE = {"N","CA","C","O","OXT","H"}
-    a_contact = []
-    for gp in manifest.get("guideposts", []):
-        chain = gp.get("chain"); resseq = gp.get("resseq"); resname = gp.get("resname", "")
-        if not chain or resseq is None:
-            continue
-        sc_atoms = [a for a in atoms if a["chain"] == chain and a["resseq"] == resseq
-                    and a["element"] != "H" and a["name"] not in BACKBONE]
-        if not sc_atoms:
-            continue
-        n = len(sc_atoms)
-        cx = sum(a["x"] for a in sc_atoms) / n
-        cy = sum(a["y"] for a in sc_atoms) / n
-        cz = sum(a["z"] for a in sc_atoms) / n
-        mu = world_to_local((cx, cy, cz), origin, R)
-        a_contact.append({
-            "type": RESIDUE_TYPE.get(resname, "other"),
-            "mu_local": mu,
-            "Sigma_diag": [1.2, 1.2, 1.2],
-            "w": 1.0,
-            "source_residue": f"{resname}{resseq}{chain}",
-            "min_dist_to_core": gp.get("min_dist_to_core"),
-        })
+    # A_contact: two modes.
+    #   ORACLE: one typed Gaussian per curated guidepost residue, centered at the residue's
+    #           sidechain centroid in the local frame (target-specific; uses observed pocket
+    #           coords — privileged info; appropriate as an upper-bound diagnostic).
+    #   CHEM:   Gaussians derived ONLY from cofactor geometry + reaction-class rules
+    #           (no PDB residue coords; chemistry-only; the non-oracle baseline).
+    if mode == "chem":
+        a_contact = derive_a_contact_chem(cofactor_local)
+    else:
+        RESIDUE_TYPE = {
+            "ALA":"hydrophobic","VAL":"hydrophobic","LEU":"hydrophobic","ILE":"hydrophobic",
+            "MET":"hydrophobic","PRO":"hydrophobic","GLY":"small",
+            "PHE":"aromatic","TYR":"aromatic","TRP":"aromatic",
+            "SER":"polar","THR":"polar","ASN":"polar","GLN":"polar","CYS":"polar",
+            "HIS":"anchor","LYS":"charged_base","ARG":"charged_base",
+            "ASP":"charged_acid","GLU":"charged_acid",
+        }
+        BACKBONE = {"N","CA","C","O","OXT","H"}
+        a_contact = []
+        for gp in manifest.get("guideposts", []):
+            chain = gp.get("chain"); resseq = gp.get("resseq"); resname = gp.get("resname", "")
+            if not chain or resseq is None:
+                continue
+            sc_atoms = [a for a in atoms if a["chain"] == chain and a["resseq"] == resseq
+                        and a["element"] != "H" and a["name"] not in BACKBONE]
+            if not sc_atoms:
+                continue
+            n = len(sc_atoms)
+            cx = sum(a["x"] for a in sc_atoms) / n
+            cy = sum(a["y"] for a in sc_atoms) / n
+            cz = sum(a["z"] for a in sc_atoms) / n
+            mu = world_to_local((cx, cy, cz), origin, R)
+            a_contact.append({
+                "type": RESIDUE_TYPE.get(resname, "other"),
+                "mu_local": mu,
+                "Sigma_diag": [1.2, 1.2, 1.2],
+                "w": 1.0,
+                "source_residue": f"{resname}{resseq}{chain}",
+                "min_dist_to_core": gp.get("min_dist_to_core"),
+            })
 
     a_anchor = []
     if manifest.get("anchor", {}).get("treat_as") == "diagnostic":
@@ -188,16 +256,24 @@ def build_a_cat(target_dir, target_id):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("target_dir")
+    ap.add_argument("--mode", choices=["oracle", "chem"], default="oracle",
+                    help="oracle = A_contact from curated guidepost residues (uses observed pocket coords); "
+                         "chem = A_contact from cofactor geometry + reaction-class rules only (no observed pocket coords)")
     ap.add_argument("--out")
     args = ap.parse_args()
     target_id = os.path.basename(os.path.normpath(args.target_dir))
-    a_cat = build_a_cat(args.target_dir, target_id)
-    out = args.out or os.path.join(args.target_dir, "A_cat.json")
+    a_cat = build_a_cat(args.target_dir, target_id, mode=args.mode)
+    a_cat["mode"] = args.mode
+    default_out = f"A_cat_{args.mode}.json" if args.mode != "oracle" else "A_cat.json"
+    out = args.out or os.path.join(args.target_dir, default_out)
     json.dump(a_cat, open(out, "w"), indent=2)
-    print(f"=== A_cat instantiated for {target_id} ===")
+    print(f"=== A_cat instantiated for {target_id} (mode={args.mode}) ===")
     print(f"  cofactor atoms (local):  {len(a_cat['cofactor_atoms_local'])}")
     print(f"  A_steric components:     {len(a_cat['channels']['A_steric'])}")
     print(f"  A_contact components:    {len(a_cat['channels']['A_contact'])}")
+    for c in a_cat['channels']['A_contact']:
+        src = c.get('source_residue') or c.get('source_rule', '')
+        print(f"      [{c['type']}]  mu={c['mu_local']}  Sigma={c['Sigma_diag']}  w={c['w']}  ({src})")
     print(f"  A_path:                  {'yes' if a_cat['channels']['A_path'] else 'no'}")
     print(f"  A_TS components:         {len(a_cat['channels']['A_TS'])}")
     print(f"  wrote {out}")
