@@ -1,0 +1,103 @@
+# V_chem v0 — gated grammar for organometallic ArM cofactor validity.
+# Chemist-editable. Each template is per cofactor TYPE (not per PDB target).
+# Distances/CNs are DRAFT values — calibrate against CSD distributions (audit's
+# deterministic_checks.json has Ir/Rh/Ru bands for the curated targets; the
+# wrong-metal Zn ranges are textbook organozinc/biological-Zn coordination).
+#
+# Gates evaluate categorically (PASS/FAIL). Wrong-metal must trip a gate, not just
+# get a worse continuous score.
+#
+# Coverage today: G_metal, G_coord, G_hapticity, G_active_state.
+# G_access (open-cone) is V_rxn territory and lives in v_rxn.py.
+
+templates:
+
+  cp_star_ir_iii_ath:
+    description: "Cp*Ir(III) piano-stool, κ-N,N chelate, hydride at open site (3ZP9 type)."
+    metal:
+      element: IR
+      oxidation_state: 3
+      allowed_cn: [6, 7, 8]   # piano-stool counts: 3 from Cp* (formal η5) + 2 from N,N + 1 from hydride/labile; raw heavy-atom count is 8
+      bond_distances:         # min, max in Angstroms — DRAFT
+        IR-N: [1.95, 2.40]
+        IR-C: [2.00, 2.35]
+        IR-H: [1.40, 1.85]
+        IR-O: [1.95, 2.25]
+        IR-CL: [2.30, 2.55]
+    hapticity:
+      required:
+        - {type: eta5_cp, n_carbons: 5, mc_dist_band: [1.95, 2.35], mc_spread_max: 0.25}
+        - {type: kappa_n_n, n_donors: 2, donor_element: N}
+    active_species:
+      required_elements: [H]       # hydride present
+      open_site_required: true     # coordination sphere has room for substrate (deferred to V_rxn)
+    forbidden_metals: [ZN, MG, CA, NA, K, AL]   # d10 / s-block / hard-Lewis-acid: no eta5-Cp organometallics
+    notes: "Wrong-metal Ir->Zn trips (G_metal: element != IR) AND (G_hapticity: ZN in forbidden_metals) AND (G_coord: Zn-C distances 2.1-2.2 Å outside any reasonable Zn-C band)."
+
+  cp_rh_i_alkyne_polymerization:
+    description: "CpRh(I), η5-Cp, COD labile, open face for alkyne (3WJC type)."
+    metal:
+      element: RH
+      oxidation_state: 1
+      allowed_cn: [4, 5, 6, 7]
+      bond_distances:
+        RH-C: [1.95, 2.35]
+        RH-N: [1.95, 2.20]
+        RH-O: [1.95, 2.20]
+    hapticity:
+      required:
+        - {type: eta5_cp, n_carbons: 5, mc_dist_band: [2.00, 2.40], mc_spread_max: 0.30}
+    active_species:
+      open_site_required: true
+    forbidden_metals: [ZN, MG, CA, NA, K, AL]
+
+  ru_ii_bpza_oxychlorination:
+    description: "Octahedral Ru(II), N,N,O-bpza, CO, Cl, aqua at open oxidant site (5L8D type)."
+    metal:
+      element: RU
+      oxidation_state: 2
+      allowed_cn: [6, 7]   # octahedral
+      bond_distances:
+        RU-N: [1.95, 2.25]
+        RU-O: [1.95, 2.25]
+        RU-C: [1.75, 2.00]   # Ru-CO carbonyl
+        RU-CL: [2.30, 2.55]
+    hapticity:
+      forbidden:
+        - {type: eta5_cp}   # no Cp in this scaffold; an η5 would be a representation error
+    active_species:
+      required_elements: [O]   # synthesized aqua at the oxidant site
+      open_site_required: true
+    forbidden_metals: [ZN, MG, CA, NA, K, AL]
+
+  cp_star_ir_iii_his_ath:
+    description: "Cp*Ir(III) like 3ZP9 but His-coordinated open leg, no synthesized hydride (5OD5)."
+    metal:
+      element: IR
+      oxidation_state: 3
+      allowed_cn: [6, 7, 8]
+      bond_distances:
+        IR-N: [1.95, 2.45]
+        IR-C: [2.00, 2.35]
+        IR-O: [1.95, 2.25]
+    hapticity:
+      required:
+        - {type: eta5_cp, n_carbons: 5, mc_dist_band: [1.95, 2.35], mc_spread_max: 0.30}
+    active_species:
+      open_site_required: false   # His227 occupies the open coordination
+    forbidden_metals: [ZN, MG, CA, NA, K, AL]
+
+# Mapping: which target uses which template. Controls intentionally reuse the
+# real-target template — the WHOLE POINT is that wrong_metal trips a gate that
+# the real target passes, using the SAME rules.
+target_to_template:
+  3ZP9: cp_star_ir_iii_ath
+  3WJC: cp_rh_i_alkyne_polymerization
+  5L8D: ru_ii_bpza_oxychlorination
+  5OD5: cp_star_ir_iii_his_ath
+  3ZP9__wrong_metal: cp_star_ir_iii_ath
+  3ZP9__scramble_guideposts: cp_star_ir_iii_ath
+  3ZP9__random_guideposts: cp_star_ir_iii_ath
+  3ZP9__block_open_site: cp_star_ir_iii_ath          # catalytic control (compiler v_rxn)
+  3ZP9__remove_hydride: cp_star_ir_iii_ath
+  3ZP9__wrong_hapticity: cp_star_ir_iii_ath
