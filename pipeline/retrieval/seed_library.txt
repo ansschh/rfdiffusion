@@ -1,0 +1,45 @@
+# Tier-1 seed: non-ArM metalloenzymes spanning diverse metal/pocket types.
+#
+# Format: PDB_ID  metal_element  note
+# Build with: bash pipeline/retrieval/build_library.sh
+#
+# DELIBERATE EXCLUSIONS (per PI strict-leakage policy):
+#   - human carbonic anhydrase II  (the 3ZP9 ArM host) and ALL carbonic anhydrases (cross-family caution)
+#   - common ArM scaffolds:        streptavidin, apo-ferritin, papain, neocarzinostatin
+#
+# Some of these IDs may not have the requested element / resname — the build script
+# will skip failed extractions and report; PI/user can prune to a curated final set.
+
+# --- Cu enzymes (blue copper + oxidase) ---
+1AKR  CU   azurin (Pseudomonas aeruginosa)
+1PLC  CU   plastocyanin (poplar)
+1GAY  CU   galactose oxidase (Fusarium)
+1OXY  CU   amine oxidase
+
+# --- Cu,Zn-SOD (two pocket types from one structure) ---
+1SOR  CU   Cu,Zn-SOD Cu site (bovine)
+1SOR  ZN   Cu,Zn-SOD Zn site (bovine)
+
+# --- Mn enzymes ---
+3MDS  MN   Mn-catalase (Lactobacillus)
+1IPF  MN   Mn-SOD
+
+# --- Zn enzymes (NOT carbonic anhydrase) ---
+4TLN  ZN   thermolysin (Bacillus)
+1ADC  ZN   alcohol dehydrogenase
+1A4M  ZN   adenosine deaminase
+
+# --- Fe heme enzymes ---
+1MBO  FE   myoglobin (sperm whale)
+2CCY  FE   cytochrome c'
+2CPP  FE   cytochrome P450cam (camphor monooxygenase)
+
+# --- Fe non-heme ---
+1LOX  FE   lipoxygenase (rabbit)
+1FXD  FE   rubredoxin
+
+# --- Ni enzyme ---
+1H6L  NI   urease (jack bean)
+
+# --- Mo enzyme ---
+1DMR  MO   DMSO reductase
