@@ -436,6 +436,36 @@ def compile_target(pdb_id, targets, audit_dir, pdb_dir, out_root,
         report["control"] = "scramble_guideposts: farthest contacts (no-A_c proxy)"
     elif control == "random_guideposts":
         report["control"] = "random_guideposts: random residues in the real guidepost distance band (leakage control)"
+    elif control == "block_open_site":
+        # Add a blocking pseudo-atom (C) at 4.0 A along the metal->hydride vector — substrate
+        # approach path is obstructed. Targets V_rxn G_access (V_chem won't see it; the blocker
+        # is beyond the coord sphere).
+        m = core[0]
+        h = next((a for a in core if a.element == "H"), None)
+        if h is None:
+            raise SystemExit("block_open_site needs a synthesized hydride in core (use on hydride-bearing target)")
+        v = normalize((h.x - m.x, h.y - m.y, h.z - m.z))
+        bx, by, bz = m.x + v[0] * 4.0, m.y + v[1] * 4.0, m.z + v[2] * 4.0
+        core.append(Atom(99998, "X1", "", "LIG", "L", 1, bx, by, bz, 1.0, "C", "HETATM"))
+        report["synthesized"].append("X1 (C, blocker placed 4.0 A along metal->hydride; obstructs substrate path)")
+        report["control"] = "block_open_site: blocking pseudo-atom X1 in substrate approach cone"
+    elif control == "remove_hydride":
+        # Drop the synthesized H atoms from core — no transferable hydride. Targets V_chem G_active_state.
+        before = len(core)
+        core = [a for a in core if a.element != "H"]
+        report["dropped"].append(f"hydride atoms removed for control (kept {len(core)} of {before})")
+        report["control"] = "remove_hydride: synthesized hydride atoms removed; no transferable H at open site"
+    elif control == "wrong_hapticity":
+        # Keep only the single nearest Cp* C atom; eta5 -> eta1. Targets V_chem G_hapticity.
+        m = core[0]
+        cs = sorted([(a, dist(m.xyz, a.xyz)) for a in core if a.element == "C" and a is not m],
+                    key=lambda t: t[1])
+        if len(cs) < 2:
+            raise SystemExit("wrong_hapticity: target has <2 ring carbons; not applicable (use a Cp-bearing target)")
+        drop = set(id(a) for a, _ in cs[1:])
+        core = [a for a in core if id(a) not in drop]
+        report["dropped"].append(f"{len(drop)} Cp* C atoms removed for control (eta5 -> eta1; kept {cs[0][0].name})")
+        report["control"] = f"wrong_hapticity: kept only 1 Cp* C (closest); eta5 -> eta1"
     elif control != "none":
         raise SystemExit(f"unknown control '{control}'")
 
@@ -496,7 +526,8 @@ def main():
     ap.add_argument("--num-designs", type=int, default=None)
     ap.add_argument("--guideposts", type=int, default=None)
     ap.add_argument("--control", default="none",
-                    choices=["none", "wrong_metal", "scramble_guideposts", "random_guideposts"])
+                    choices=["none", "wrong_metal", "scramble_guideposts", "random_guideposts",
+                             "block_open_site", "remove_hydride", "wrong_hapticity"])
     a = ap.parse_args()
     targets = json.load(open(a.targets))
     if a.pdb_id not in targets["targets"]:
