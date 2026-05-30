@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""retrieve.py — rank candidate pockets against an A_cat query (gate-then-soft).
+
+Score (per candidate, best across sampled orientations):
+  gates (hard)     : G_clash (max steric overlap allowed),
+                     G_path  (path-cone occupancy <= max_path_residues)
+  soft (additive)  : Σ_τ w_τ Σ_r in pocket exp(-½(local_r - μ)^T Σ^-1 (local_r - μ))   (typed contact)
+  soft (penalty)   : λ_clash * Σ residues inside any A_steric sphere   (overlap measure)
+                     λ_path  * Σ residues inside A_path cone
+
+Rotational search: spherical-Fibonacci sampling of N orientations (default 72).
+
+Usage:
+  python retrieve.py --acat <A_cat.json> --pockets <p1.json> [<p2.json> ...] [--n-rot 72]
+"""
+from __future__ import annotations
+import argparse, json, math, os
+
+
+def vsub(a,b): return (a[0]-b[0], a[1]-b[1], a[2]-b[2])
+def vdot(a,b): return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]
+def vcross(a,b): return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
+def vlen(v): return math.sqrt(vdot(v,v))
+def vnorm(v):
+    n = vlen(v); return (v[0]/n, v[1]/n, v[2]/n) if n>0 else v
+def vscale(v,s): return (v[0]*s, v[1]*s, v[2]*s)
+
+
+def world_to_local_via_R(world_xyz, metal_xyz, R):
+    """v_local = R @ (world - metal). R rows are local axes in world frame."""
+    rel = vsub(world_xyz, metal_xyz)
+    return (R[0][0]*rel[0]+R[0][1]*rel[1]+R[0][2]*rel[2],
+            R[1][0]*rel[0]+R[1][1]*rel[1]+R[1][2]*rel[2],
+            R[2][0]*rel[0]+R[2][1]*rel[1]+R[2][2]*rel[2])
+
+
+def sample_rotations(n_target):
+    """Spherical-Fibonacci z-axis sampling × 8 azimuthal rotations each."""
+    n_z = max(1, n_target // 8)
+    rotations = []
+    phi = (1.0 + math.sqrt(5.0)) / 2.0
+    for i in range(n_z):
+        z = 1.0 - 2.0 * (i + 0.5) / n_z
+        r = math.sqrt(max(0.0, 1.0 - z*z))
+        theta = 2.0 * math.pi * i / phi
+        z_axis = (r*math.cos(theta), r*math.sin(theta), z)
+        tmp = (0.0, 0.0, 1.0) if abs(z_axis[2]) < 0.99 else (1.0, 0.0, 0.0)
+        x_raw = vsub(tmp, vscale(z_axis, vdot(tmp, z_axis)))
+        x_axis = vnorm(x_raw)
+        y_axis = vcross(z_axis, x_axis)
+        for j in range(8):
+            angle = 2.0 * math.pi * j / 8.0
+            ca, sa = math.cos(angle), math.sin(angle)
+            x_rot = (x_axis[0]*ca + y_axis[0]*sa, x_axis[1]*ca + y_axis[1]*sa, x_axis[2]*ca + y_axis[2]*sa)
+            y_rot = (-x_axis[0]*sa + y_axis[0]*ca, -x_axis[1]*sa + y_axis[1]*ca, -x_axis[2]*sa + y_axis[2]*ca)
+            rotations.append([[x_rot[0], x_rot[1], x_rot[2]],
+                              [y_rot[0], y_rot[1], y_rot[2]],
+                              [z_axis[0], z_axis[1], z_axis[2]]])
+    return rotations
+
+
+def score_orientation(a_cat, pocket, R, params):
+    metal_xyz = pocket["metal"]["world"]
+    contacts = a_cat["channels"]["A_contact"]
+    sterics = a_cat["channels"]["A_steric"]
+    path = a_cat["channels"]["A_path"]
+
+    score = 0.0
+    clash = 0.0
+    path_res = 0
+    for res in pocket["pocket_residues"]:
+        local = world_to_local_via_R(res["sidechain_centroid_world"], metal_xyz, R)
+        # typed Gaussian contact overlap
+        for c in contacts:
+            if c["type"] != res["type"]:
+                continue
+            mu = c["mu_local"]; sig = c["Sigma_diag"]; w = c["w"]
+            d2 = ((local[0]-mu[0])/sig[0])**2 + ((local[1]-mu[1])/sig[1])**2 + ((local[2]-mu[2])/sig[2])**2
+            score += w * math.exp(-0.5 * d2)
+        # clash with A_steric exclusion spheres
+        for s in sterics:
+            p = s["pos_local"]; r = s["r"]
+            d = math.sqrt((local[0]-p[0])**2 + (local[1]-p[1])**2 + (local[2]-p[2])**2)
+            if d < r:
+                clash += (r - d) ** 2
+        # inside A_path cone?
+        if path:
+            apex = path["apex_local"]; axis = tuple(path["axis_local"])
+            half = path["half_angle_deg"]; extent = path["extent_A"]
+            rel = vsub(local, apex)
+            proj = vdot(rel, axis)
+            if 0.3 < proj < extent:
+                perp2 = max(0.0, vdot(rel, rel) - proj*proj)
+                if math.sqrt(perp2) < proj * math.tan(math.radians(half)):
+                    path_res += 1
+
+    soft = score - params["lambda_clash"] * clash - params["lambda_path"] * path_res
+    gate_clash_ok = clash <= params["max_clash_overlap"]
+    gate_path_ok = path_res <= params["max_path_residues"]
+    return {
+        "soft_score": soft, "contact_score": round(score, 3),
+        "clash_overlap": round(clash, 3), "n_path_residues": path_res,
+        "gates_pass": gate_clash_ok and gate_path_ok,
+    }
+
+
+def score_pocket(a_cat, pocket, params, rotations):
+    best = None
+    for R in rotations:
+        r = score_orientation(a_cat, pocket, R, params)
+        if best is None or r["soft_score"] > best["soft_score"]:
+            best = r
+            best["R"] = R
+    return best
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--acat", required=True, help="A_cat JSON (from instantiate_acat.py)")
+    ap.add_argument("--pockets", nargs="+", required=True, help="Pocket JSONs (from extract_pocket.py)")
+    ap.add_argument("--n-rot", type=int, default=72)
+    ap.add_argument("--lambda-clash", type=float, default=1.0)
+    ap.add_argument("--lambda-path", type=float, default=2.0)
+    ap.add_argument("--max-clash-overlap", type=float, default=3.0)
+    ap.add_argument("--max-path-residues", type=int, default=1)
+    ap.add_argument("--out")
+    ap.add_argument("--top", type=int, default=10)
+    args = ap.parse_args()
+
+    a_cat = json.load(open(args.acat))
+    params = {"lambda_clash": args.lambda_clash, "lambda_path": args.lambda_path,
+              "max_clash_overlap": args.max_clash_overlap, "max_path_residues": args.max_path_residues}
+    rotations = sample_rotations(args.n_rot)
+
+    results = []
+    for ppath in args.pockets:
+        pocket = json.load(open(ppath))
+        best = score_pocket(a_cat, pocket, params, rotations)
+        results.append({
+            "pdb_id": pocket.get("pdb_id"),
+            "metal": pocket.get("metal", {}).get("element"),
+            "n_residues": pocket.get("n_residues"),
+            "soft_score": round(best["soft_score"], 3),
+            "contact_score": best["contact_score"],
+            "clash_overlap": best["clash_overlap"],
+            "n_path_residues": best["n_path_residues"],
+            "gates_pass": best["gates_pass"],
+            "pocket_file": ppath,
+        })
+    results.sort(key=lambda r: r["soft_score"], reverse=True)
+
+    print(f"=== retrieval query: {a_cat['target']}  ({len(args.pockets)} candidates, {args.n_rot} orientations) ===")
+    cols = ("rank", "pdb_id", "metal", "n_res", "soft", "contact", "clash", "path_res", "gates")
+    print(" | ".join(f"{c:>10}" for c in cols))
+    for i, r in enumerate(results[:args.top]):
+        vals = (i+1, r["pdb_id"], r["metal"], r["n_residues"], r["soft_score"],
+                r["contact_score"], r["clash_overlap"], r["n_path_residues"], "ok" if r["gates_pass"] else "FAIL")
+        print(" | ".join(f"{str(v):>10}" for v in vals))
+    if args.out:
+        json.dump(results, open(args.out, "w"), indent=2)
+        print(f"\n  wrote {args.out}")
+
+
+if __name__ == "__main__":
+    main()
