@@ -65,34 +65,46 @@ def score_orientation(a_cat, pocket, R, params):
     sterics = a_cat["channels"]["A_steric"]
     path = a_cat["channels"]["A_path"]
 
-    score = 0.0
-    clash = 0.0
-    path_res = 0
+    # Pre-transform pocket residues to local frame (once per orientation).
+    locals_by_type = {}
     for res in pocket["pocket_residues"]:
         local = world_to_local_via_R(res["sidechain_centroid_world"], metal_xyz, R)
-        # typed Gaussian contact overlap
-        for c in contacts:
-            if c["type"] != res["type"]:
-                continue
-            mu = c["mu_local"]; sig = c["Sigma_diag"]; w = c["w"]
+        locals_by_type.setdefault(res["type"], []).append((local, res))
+
+    # Winner-take-all per Gaussian: each A_contact picks its BEST matching residue (by type +
+    # position). Bounds score by sum_of_weights, removes pocket-size bias.
+    score = 0.0
+    matches = []
+    for c in contacts:
+        best_o = 0.0; best_res = None
+        for (local, res) in locals_by_type.get(c["type"], []):
+            mu = c["mu_local"]; sig = c["Sigma_diag"]
             d2 = ((local[0]-mu[0])/sig[0])**2 + ((local[1]-mu[1])/sig[1])**2 + ((local[2]-mu[2])/sig[2])**2
-            score += w * math.exp(-0.5 * d2)
-        # clash with A_steric exclusion spheres
-        for s in sterics:
-            p = s["pos_local"]; r = s["r"]
-            d = math.sqrt((local[0]-p[0])**2 + (local[1]-p[1])**2 + (local[2]-p[2])**2)
-            if d < r:
-                clash += (r - d) ** 2
-        # inside A_path cone?
-        if path:
-            apex = path["apex_local"]; axis = tuple(path["axis_local"])
-            half = path["half_angle_deg"]; extent = path["extent_A"]
-            rel = vsub(local, apex)
-            proj = vdot(rel, axis)
-            if 0.3 < proj < extent:
-                perp2 = max(0.0, vdot(rel, rel) - proj*proj)
-                if math.sqrt(perp2) < proj * math.tan(math.radians(half)):
-                    path_res += 1
+            o = math.exp(-0.5 * d2)
+            if o > best_o:
+                best_o = o; best_res = f"{res['resname']}{res['resseq']}{res['chain']}"
+        score += c["w"] * best_o
+        matches.append({"gaussian_type": c["type"], "best_overlap": round(best_o, 3),
+                        "best_residue": best_res, "source": c.get("source_residue")})
+
+    # Clash with A_steric exclusion spheres + path-cone occupancy (iterate all residues once).
+    clash = 0.0
+    path_res = 0
+    for type_list in locals_by_type.values():
+        for (local, _res) in type_list:
+            for s in sterics:
+                p = s["pos_local"]; r = s["r"]
+                d = math.sqrt((local[0]-p[0])**2 + (local[1]-p[1])**2 + (local[2]-p[2])**2)
+                if d < r:
+                    clash += (r - d) ** 2
+            if path:
+                apex = path["apex_local"]; axis = tuple(path["axis_local"])
+                rel = vsub(local, apex)
+                proj = vdot(rel, axis)
+                if 0.3 < proj < path["extent_A"]:
+                    perp2 = max(0.0, vdot(rel, rel) - proj*proj)
+                    if math.sqrt(perp2) < proj * math.tan(math.radians(path["half_angle_deg"])):
+                        path_res += 1
 
     soft = score - params["lambda_clash"] * clash - params["lambda_path"] * path_res
     gate_clash_ok = clash <= params["max_clash_overlap"]
@@ -118,7 +130,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--acat", required=True, help="A_cat JSON (from instantiate_acat.py)")
     ap.add_argument("--pockets", nargs="+", required=True, help="Pocket JSONs (from extract_pocket.py)")
-    ap.add_argument("--n-rot", type=int, default=72)
+    ap.add_argument("--n-rot", type=int, default=144)
     ap.add_argument("--lambda-clash", type=float, default=1.0)
     ap.add_argument("--lambda-path", type=float, default=2.0)
     ap.add_argument("--max-clash-overlap", type=float, default=3.0)

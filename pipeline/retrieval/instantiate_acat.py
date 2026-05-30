@@ -114,15 +114,41 @@ def build_a_cat(target_dir, target_id):
                   "content_type": "substrate_reactive_atom",
                   "expected_M_substrate_A": [2.5, 3.5]}
 
-    # ATH-style hydrophobic groove on the Cp* face (z > 0 side)
-    a_contact = [
-        {"type": "hydrophobic", "mu_local": [3.5, 0.0, 2.5], "Sigma_diag": [1.8, 1.8, 1.8], "w": 1.0,
-         "note": "Cp*-face hydrophobic groove"},
-        {"type": "hydrophobic", "mu_local": [-3.0, 2.0, 1.5], "Sigma_diag": [1.8, 1.8, 1.8], "w": 1.0,
-         "note": "lateral hydrophobic"},
-        {"type": "polar", "mu_local": [2.5, -3.0, -0.5], "Sigma_diag": [1.5, 1.5, 1.5], "w": 0.5,
-         "note": "sulfonamide side / anchor-adjacent"},
-    ]
+    # Data-driven A_contact: one typed Gaussian per curated guidepost residue, centered at
+    # its sidechain centroid in the local frame (tight Sigma). Type from residue identity.
+    # The target's own pocket becomes the natural high-score; foreign pockets only score if
+    # they have the right residue TYPE at the right local POSITION.
+    RESIDUE_TYPE = {
+        "ALA":"hydrophobic","VAL":"hydrophobic","LEU":"hydrophobic","ILE":"hydrophobic",
+        "MET":"hydrophobic","PRO":"hydrophobic","GLY":"small",
+        "PHE":"aromatic","TYR":"aromatic","TRP":"aromatic",
+        "SER":"polar","THR":"polar","ASN":"polar","GLN":"polar","CYS":"polar",
+        "HIS":"anchor","LYS":"charged_base","ARG":"charged_base",
+        "ASP":"charged_acid","GLU":"charged_acid",
+    }
+    BACKBONE = {"N","CA","C","O","OXT","H"}
+    a_contact = []
+    for gp in manifest.get("guideposts", []):
+        chain = gp.get("chain"); resseq = gp.get("resseq"); resname = gp.get("resname", "")
+        if not chain or resseq is None:
+            continue
+        sc_atoms = [a for a in atoms if a["chain"] == chain and a["resseq"] == resseq
+                    and a["element"] != "H" and a["name"] not in BACKBONE]
+        if not sc_atoms:
+            continue
+        n = len(sc_atoms)
+        cx = sum(a["x"] for a in sc_atoms) / n
+        cy = sum(a["y"] for a in sc_atoms) / n
+        cz = sum(a["z"] for a in sc_atoms) / n
+        mu = world_to_local((cx, cy, cz), origin, R)
+        a_contact.append({
+            "type": RESIDUE_TYPE.get(resname, "other"),
+            "mu_local": mu,
+            "Sigma_diag": [1.2, 1.2, 1.2],
+            "w": 1.0,
+            "source_residue": f"{resname}{resseq}{chain}",
+            "min_dist_to_core": gp.get("min_dist_to_core"),
+        })
 
     a_anchor = []
     if manifest.get("anchor", {}).get("treat_as") == "diagnostic":
