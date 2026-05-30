@@ -10,8 +10,23 @@ Usage:
   python extract_pocket.py <pdb_file> --metal ZN --metal-resname ZN --out pocket.json
 """
 from __future__ import annotations
-import argparse, json, math, os
+import argparse, json, math, os, re, urllib.request
 from collections import defaultdict
+
+
+def fetch_pdb_if_missing(path):
+    """If `path` doesn't exist and looks like 'something/<PDB_ID>.pdb', fetch from RCSB."""
+    if os.path.isfile(path):
+        return path
+    base = os.path.basename(path)
+    m = re.fullmatch(r"([0-9][a-zA-Z0-9]{3})\.pdb", base)
+    if not m:
+        return path                              # nothing to do — caller will see FileNotFound
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    url = f"https://files.rcsb.org/download/{m.group(1).upper()}.pdb"
+    print(f"[fetch] {url} -> {path}")
+    urllib.request.urlretrieve(url, path)
+    return path
 
 METALS = {"IR","ZN","RH","RU","FE","MN","CU","CO","NI","PD","PT","MO","W","OS","V","CR","MG","CA","NA","K","AL"}
 BACKBONE = {"N","CA","C","O","OXT","H"}
@@ -46,6 +61,7 @@ def dist(a, b):
 
 
 def extract_pocket(pdb_path, metal_element, metal_resname=None, max_dist=8.0):
+    pdb_path = fetch_pdb_if_missing(pdb_path)
     atoms = parse_pdb(pdb_path)
     metals = [a for a in atoms if a["element"]==metal_element.upper() and
               (metal_resname is None or a["resname"]==metal_resname.upper())]
