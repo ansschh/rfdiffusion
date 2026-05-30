@@ -61,9 +61,16 @@ def sample_rotations(n_target):
 
 def score_orientation(a_cat, pocket, R, params):
     metal_xyz = pocket["metal"]["world"]
-    contacts = a_cat["channels"]["A_contact"]
-    sterics = a_cat["channels"]["A_steric"]
-    path = a_cat["channels"]["A_path"]
+    channels = a_cat["channels"]
+    include = params["include"]
+    contacts = channels.get("A_contact", []) if "A_contact" in include else []
+    sterics  = channels.get("A_steric", [])  if "A_steric"  in include else []
+    path     = channels.get("A_path")        if "A_path"    in include else None
+    stereo   = channels.get("A_stereo")      if "A_stereo"  in include else None
+    elec     = channels.get("A_elec", [])    if "A_elec"    in include else []
+    if isinstance(elec, dict):
+        elec = []   # legacy "missing" stub — empty list
+    anchor   = channels.get("A_anchor", [])  if "A_anchor"  in include else []
 
     # Pre-transform pocket residues to local frame (once per orientation).
     locals_by_type = {}
@@ -106,11 +113,57 @@ def score_orientation(a_cat, pocket, R, params):
                     if math.sqrt(perp2) < proj * math.tan(math.radians(path["half_angle_deg"])):
                         path_res += 1
 
-    soft = score - params["lambda_clash"] * clash - params["lambda_path"] * path_res
+    # A_anchor scoring: winner-take-all per anchor Gaussian (same shape as A_contact).
+    anchor_score = 0.0
+    for a in anchor:
+        if not a.get("carried", True):
+            continue   # skip diagnostic-only anchor entries
+        atype = a.get("type", "anchor"); mu = a.get("mu_local"); sig = a.get("Sigma_diag", [1.5,1.5,1.5])
+        if not mu:
+            continue
+        best_o = 0.0
+        for (local, _res) in locals_by_type.get(atype, []):
+            d2 = ((local[0]-mu[0])/sig[0])**2 + ((local[1]-mu[1])/sig[1])**2 + ((local[2]-mu[2])/sig[2])**2
+            o = math.exp(-0.5 * d2)
+            best_o = max(best_o, o)
+        anchor_score += a.get("w", 0.5) * best_o
+
+    # A_stereo scoring: residues on the +v_stereo side of substrate cone get a small bonus.
+    stereo_score = 0.0
+    if stereo and path:
+        v = stereo.get("v_stereo_local", [0,0,0]); bias = stereo.get("bias_strength", 0.0)
+        apex = path["apex_local"]; axis = tuple(path["axis_local"])
+        for type_list in locals_by_type.values():
+            for (local, _res) in type_list:
+                rel = vsub(local, apex)
+                proj = vdot(rel, axis)
+                if 0.3 < proj < path["extent_A"]:
+                    # residue is in the substrate cone region
+                    side = rel[0]*v[0] + rel[1]*v[1] + rel[2]*v[2]
+                    if side > 0:
+                        stereo_score += bias
+
+    # A_elec scoring: typed Gaussian against charged residues (same shape as A_contact).
+    elec_score = 0.0
+    for e in elec:
+        etype = e.get("type", "charged_acid"); mu = e.get("mu_local"); sig = e.get("Sigma_diag", [2.0,2.0,2.0])
+        if not mu:
+            continue
+        best_o = 0.0
+        for (local, _res) in locals_by_type.get(etype, []):
+            d2 = ((local[0]-mu[0])/sig[0])**2 + ((local[1]-mu[1])/sig[1])**2 + ((local[2]-mu[2])/sig[2])**2
+            o = math.exp(-0.5 * d2)
+            best_o = max(best_o, o)
+        elec_score += e.get("w", 0.5) * best_o
+
+    soft = (score + anchor_score + stereo_score + elec_score
+            - params["lambda_clash"] * clash - params["lambda_path"] * path_res)
     gate_clash_ok = clash <= params["max_clash_overlap"]
     gate_path_ok = path_res <= params["max_path_residues"]
     return {
         "soft_score": soft, "contact_score": round(score, 3),
+        "anchor_score": round(anchor_score, 3), "stereo_score": round(stereo_score, 3),
+        "elec_score": round(elec_score, 3),
         "clash_overlap": round(clash, 3), "n_path_residues": path_res,
         "gates_pass": gate_clash_ok and gate_path_ok,
     }
@@ -135,16 +188,24 @@ def main():
     ap.add_argument("--lambda-path", type=float, default=2.0)
     ap.add_argument("--max-clash-overlap", type=float, default=3.0)
     ap.add_argument("--max-path-residues", type=int, default=1)
+    ap.add_argument("--include", nargs="+",
+                    default=["A_contact", "A_path", "A_steric"],
+                    help="Channels to use for scoring (ablation knob). Subset of "
+                         "A_contact / A_path / A_steric / A_anchor / A_stereo / A_elec.")
+    ap.add_argument("--save-best-R", help="If set, save per-pocket best_R rotation matrices to this JSON "
+                                           "(needed by transplant_pocket.py for the heme-as-scaffold experiment)")
     ap.add_argument("--out")
     ap.add_argument("--top", type=int, default=10)
     args = ap.parse_args()
 
     a_cat = json.load(open(args.acat))
     params = {"lambda_clash": args.lambda_clash, "lambda_path": args.lambda_path,
-              "max_clash_overlap": args.max_clash_overlap, "max_path_residues": args.max_path_residues}
+              "max_clash_overlap": args.max_clash_overlap, "max_path_residues": args.max_path_residues,
+              "include": set(args.include)}
     rotations = sample_rotations(args.n_rot)
 
     results = []
+    best_R_by_pocket = {}
     for ppath in args.pockets:
         pocket = json.load(open(ppath))
         best = score_pocket(a_cat, pocket, params, rotations)
@@ -154,20 +215,34 @@ def main():
             "n_residues": pocket.get("n_residues"),
             "soft_score": round(best["soft_score"], 3),
             "contact_score": best["contact_score"],
+            "anchor_score": best.get("anchor_score", 0.0),
+            "stereo_score": best.get("stereo_score", 0.0),
+            "elec_score": best.get("elec_score", 0.0),
             "clash_overlap": best["clash_overlap"],
             "n_path_residues": best["n_path_residues"],
             "gates_pass": best["gates_pass"],
             "pocket_file": ppath,
         })
+        best_R_by_pocket[pocket.get("pdb_id")] = {
+            "best_R": best["R"],
+            "pocket_file": ppath,
+            "metal_world": pocket["metal"]["world"],
+        }
     results.sort(key=lambda r: r["soft_score"], reverse=True)
 
+    if args.save_best_R:
+        json.dump(best_R_by_pocket, open(args.save_best_R, "w"), indent=2)
+        print(f"  saved best_R per pocket -> {args.save_best_R}")
+
     print(f"=== retrieval query: {a_cat['target']}  ({len(args.pockets)} candidates, {args.n_rot} orientations) ===")
-    cols = ("rank", "pdb_id", "metal", "n_res", "soft", "contact", "clash", "path_res", "gates")
-    print(" | ".join(f"{c:>10}" for c in cols))
+    print(f"    channels included: {sorted(args.include)}")
+    cols = ("rank", "pdb_id", "metal", "n_res", "soft", "contact", "anchor", "stereo", "elec", "path_res", "gates")
+    print(" | ".join(f"{c:>9}" for c in cols))
     for i, r in enumerate(results[:args.top]):
         vals = (i+1, r["pdb_id"], r["metal"], r["n_residues"], r["soft_score"],
-                r["contact_score"], r["clash_overlap"], r["n_path_residues"], "ok" if r["gates_pass"] else "FAIL")
-        print(" | ".join(f"{str(v):>10}" for v in vals))
+                r["contact_score"], r["anchor_score"], r["stereo_score"], r["elec_score"],
+                r["n_path_residues"], "ok" if r["gates_pass"] else "FAIL")
+        print(" | ".join(f"{str(v):>9}" for v in vals))
     if args.out:
         json.dump(results, open(args.out, "w"), indent=2)
         print(f"\n  wrote {args.out}")

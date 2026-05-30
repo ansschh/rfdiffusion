@@ -90,6 +90,55 @@ def world_to_local(p, origin, R):
     return [round(R[i][0]*rel[0] + R[i][1]*rel[1] + R[i][2]*rel[2], 3) for i in range(3)]
 
 
+def derive_a_stereo_chem(cofactor_local):
+    """A_stereo (DRAFT chemistry rule): directional bias for substrate approach face. For
+    chiral metal-N,N complexes, donor asymmetry defines a preferred face. v_stereo = (N1->N2) x z
+    points across the cone perpendicular to the chiral N,N axis. Soft preference for residues
+    on the +v_stereo side. Disabled if <2 N donors or near-degenerate geometry.
+    """
+    n_donors = [c for c in cofactor_local if c["element"] == "N"]
+    if len(n_donors) < 2:
+        return None
+    n1 = n_donors[0]["pos_local"]; n2 = n_donors[1]["pos_local"]
+    v_n12 = (n2[0]-n1[0], n2[1]-n1[1], n2[2]-n1[2])
+    # cross with +z axis (substrate-approach direction in local frame)
+    cross = (v_n12[1]*1.0 - v_n12[2]*0.0,
+             v_n12[2]*0.0 - v_n12[0]*1.0,
+             v_n12[0]*0.0 - v_n12[1]*0.0)
+    cn = math.sqrt(sum(c*c for c in cross))
+    if cn < 0.01:
+        return None
+    v_stereo = [round(c/cn, 4) for c in cross]
+    return {
+        "v_stereo_local": v_stereo,
+        "bias_strength": 0.3,
+        "source_rule": "(N1->N2) x z (chiral N,N donor face asymmetry); applies inside substrate cone only",
+    }
+
+
+def derive_a_elec_chem(cofactor_local, manifest):
+    """A_elec (DRAFT chemistry rule): for cationic-TS reactions (e.g., asymmetric transfer
+    hydrogenation of imines), expect anionic-residue stabilization near the substrate-cone exit.
+    Only emits when the target's reaction class is known to have a cationic TS.
+    """
+    pdb_id = (manifest.get("pdb_id") or "").upper()
+    # cationic-TS classes; DRAFT lookup, expand as more targets are added.
+    cationic_TS_targets = {"3ZP9", "5OD5"}    # ATH of cyclic imines (cationic iminium TS)
+    if pdb_id not in cationic_TS_targets:
+        return []
+    h_local = next((c["pos_local"] for c in cofactor_local if c["element"] == "H"), None)
+    if not h_local:
+        return []
+    return [{
+        "type": "charged_acid",
+        "mu_local": [round(h_local[0], 3), round(h_local[1], 3), round(h_local[2] + 4.0, 3)],
+        "Sigma_diag": [2.0, 2.0, 2.0],
+        "w": 0.5,
+        "source_rule": "ATH cationic-TS stabilization: anionic residue (Asp/Glu) expected ~4 A "
+                       "beyond hydride along substrate approach axis",
+    }]
+
+
 def derive_a_contact_chem(cofactor_local):
     """Chemistry-rule A_contact: derive Gaussians from COFACTOR GEOMETRY ALONE — no PDB residue coords.
 
@@ -229,6 +278,14 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
                      "sigma_A": 0.7, "confidence": "low",
                      "note": manifest["substrate"].get("pose_source", "transferred g_dd")})
 
+    # New chem-mode-only channels (DRAFT rules — calibrate with PI):
+    a_stereo = derive_a_stereo_chem(cofactor_local) if mode == "chem" else None
+    a_elec_list = derive_a_elec_chem(cofactor_local, manifest) if mode == "chem" else []
+    if not a_elec_list and mode != "chem":
+        a_elec_payload = {"status": "missing", "would_carry": ["cationic_TS", "metal_charge", "dipoles"]}
+    else:
+        a_elec_payload = a_elec_list
+
     return {
         "target": target_id,
         "frame": {
@@ -242,12 +299,15 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
             "A_path": a_path,
             "A_anchor": a_anchor,
             "A_TS": a_ts,
-            "A_elec": {"status": "missing", "would_carry": ["cationic_TS", "metal_charge", "dipoles"]},
+            "A_stereo": a_stereo,
+            "A_elec": a_elec_payload,
         },
         "uncertainty": {
             "A_TS": "low (transferred g_dd analog)",
-            "A_anchor": "diagnostic (not load-bearing)",
-            "A_elec": "missing", "A_dynamics": "missing", "A_solvent": "missing",
+            "A_anchor": "diagnostic (not load-bearing)" if mode == "oracle" else "draft chem rule",
+            "A_stereo": "draft chem rule" if a_stereo else "missing",
+            "A_elec": "draft chem rule" if a_elec_list else "missing",
+            "A_dynamics": "missing", "A_solvent": "missing",
         },
         "cofactor_atoms_local": cofactor_local,
     }
