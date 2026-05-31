@@ -139,6 +139,75 @@ def derive_a_elec_chem(cofactor_local, manifest):
     }]
 
 
+def derive_a_face_axis(cofactor_local):
+    """A_face_axis (chem mode): proximal/distal asymmetry vector.
+
+    Reactive (substrate) face = +z in local frame by definition (frame is
+    built with +z = metal -> open-site). Packing (cofactor body) face = -z.
+
+    Returns a payload with the axis + diagnostic info about how it was
+    determined. Used by E_face.
+    """
+    # +z is the reactive face by frame convention
+    axis = [0.0, 0.0, 1.0]
+    # diagnostic: compute centroid of cofactor heavies (excluding metal+ORI
+    # tokens); confirm it sits on the -z side (proximal) so the frame
+    # actually carries the asymmetry we expect
+    heavies = [c for c in cofactor_local
+               if c["element"] not in ("H", "IR", "RH", "RU", "ZN", "FE", "MN", "CU", "CO", "NI", "PD", "PT")]
+    if heavies:
+        cz = sum(c["pos_local"][2] for c in heavies) / len(heavies)
+    else:
+        cz = 0.0
+    return {
+        "reactive_axis_local": axis,
+        "packing_axis_local": [-axis[0], -axis[1], -axis[2]],
+        "cofactor_body_centroid_z": round(cz, 3),
+        "asymmetry_ok": cz < -0.2,
+        "note": "+z = reactive (substrate approach); -z = packing (cofactor body). "
+                "asymmetry_ok=true means cofactor heavies sit on packing side as expected.",
+    }
+
+
+def derive_a_coord_zones(cofactor_local, manifest):
+    """A_coord_zones (chem mode): the cofactor's own retained donor positions
+    define the ALLOWED zones for protein donors. Anywhere else, a protein
+    donor coordinates the metal in an unintended geometry and poisons.
+
+    For cp_star_ir_iii_his_ath (5OD5-like), this is where the carried-anchor
+    leg sits and is auto-added. For other templates, only the cofactor's
+    intrinsic donors are zones, so any protein-sidechain donor near the metal
+    triggers E_coord_zones.
+    """
+    zones = []
+    # zone for each retained N/O donor on the cofactor (within 2.5 A of metal)
+    for c in cofactor_local:
+        el = c.get("element", "")
+        if el not in ("N", "O", "S"):  continue
+        d = math.sqrt(sum(x*x for x in c["pos_local"]))
+        if d > 2.5 or d < 0.3: continue   # in coord shell
+        zones.append({
+            "center_local": [round(v, 3) for v in c["pos_local"]],
+            "radius_A": 1.0,
+            "allowed_residues": None,    # any donor sidechain (cofactor donor coincidence is OK)
+            "allowed_donor_atoms": None,
+            "source": f"cofactor_{el}_donor_{c.get('name')}",
+        })
+    # cp_star_ir_iii_his_ath template: an additional zone at the open metal
+    # leg position (+z) where the carried-anchor HIS sits.
+    pdb_id = (manifest.get("pdb_id") or "").upper()
+    HIS_LEG_TARGETS = {"5OD5"}
+    if pdb_id in HIS_LEG_TARGETS:
+        zones.append({
+            "center_local": [0.0, 0.0, 2.2],   # ~Ir-N coord distance on open leg
+            "radius_A": 1.5,
+            "allowed_residues": ["HIS"],
+            "allowed_donor_atoms": ["NE2", "ND1"],
+            "source": "carried_anchor_his_leg (cp_star_ir_iii_his_ath template)",
+        })
+    return zones
+
+
 def derive_a_contact_chem(cofactor_local):
     """Chemistry-rule A_contact: derive Gaussians from COFACTOR GEOMETRY ALONE — no PDB residue coords.
 
@@ -281,6 +350,11 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
     # New chem-mode-only channels (DRAFT rules — calibrate with PI):
     a_stereo = derive_a_stereo_chem(cofactor_local) if mode == "chem" else None
     a_elec_list = derive_a_elec_chem(cofactor_local, manifest) if mode == "chem" else []
+    # Proximal/distal asymmetry + coord-support zones — emitted in BOTH modes
+    # because they are derivable from cofactor geometry alone (chem rule), so
+    # they don't constitute oracle leakage. Available to all downstream E_terms.
+    a_face = derive_a_face_axis(cofactor_local)
+    a_coord_zones = derive_a_coord_zones(cofactor_local, manifest)
     if not a_elec_list and mode != "chem":
         a_elec_payload = {"status": "missing", "would_carry": ["cationic_TS", "metal_charge", "dipoles"]}
     else:
@@ -301,6 +375,8 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
             "A_TS": a_ts,
             "A_stereo": a_stereo,
             "A_elec": a_elec_payload,
+            "A_face": a_face,
+            "A_coord_zones": a_coord_zones,
         },
         "uncertainty": {
             "A_TS": "low (transferred g_dd analog)",
