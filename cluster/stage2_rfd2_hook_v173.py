@@ -166,7 +166,22 @@ def indep_to_atom_dicts(indep, xyz_curr, seq_curr, contig_map, cofactor_atoms_wo
         n_atom = sum(1 for a in atoms if a["record"] == "ATOM")
         n_het  = sum(1 for a in atoms if a["record"] == "HETATM")
         n_res  = len({(a["chain"], a["resseq"]) for a in atoms if a["record"] == "ATOM"})
-        print(f"DEBUG[{debug_label}]: n_ATOM={n_atom} ({n_res} residues) n_HETATM={n_het}",
+        # also report whether px0 had NaN backbone atoms (write_traj will drop those)
+        try:
+            xyz_2d = xyz_curr[0] if xyz_curr.dim() == 4 else xyz_curr
+            xyz_np = xyz_2d.detach().cpu().numpy()
+            is_sm = indep.is_sm.detach().cpu().numpy()
+            prot_mask = ~is_sm
+            ca_idx = 1
+            n_prot = int(prot_mask.sum())
+            n_prot_finite_ca = int(np.isfinite(xyz_np[prot_mask, ca_idx, 0]).sum()) if xyz_np.ndim == 3 else -1
+        except Exception:
+            n_prot = n_prot_finite_ca = -1
+        n_pdb_lines = len([l for l in pdb_lines if isinstance(l, str)
+                            and l[:6].strip() in ("ATOM", "HETATM")])
+        print(f"DEBUG[{debug_label}]: n_ATOM={n_atom} ({n_res} residues) "
+              f"n_HETATM={n_het}  px0_finite_CA={n_prot_finite_ca}/{n_prot}  "
+              f"pdb_stream_recs={n_pdb_lines}",
               flush=True)
     return atoms
 
@@ -300,9 +315,9 @@ def run_in_denoiser_smc(conf, fields, K=4, checkpoint_every=10,
         E_list = []
         for k in range(K):
             st = states[k]
-            # debug label only on the FIRST checkpoint of the FIRST particle to
-            # avoid spam; tells us if atom extraction is producing real data
-            dbg = f"t={int(t)} k={k}" if (it == 0 and k == 0) else None
+            # debug label on every checkpoint of the first particle so we can
+            # see whether atom extraction silently drops to empty mid-trajectory
+            dbg = f"t={int(t)} k={k}" if k == 0 else None
             atoms = indep_to_atom_dicts(st["indep"], st["px0_stack"][-1],
                                           st["seq_stack"][-1], st["contig_map"],
                                           cofactor_atoms_world=cofactor_world,
