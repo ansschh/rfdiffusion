@@ -185,10 +185,16 @@ def run_in_denoiser_smc(conf, fields, K=4, checkpoint_every=10,
         sampler_k = model_runners.sampler_selector(conf)
         samplers.append(sampler_k)
         indep, contig_map, atomizer, t_step_input = sampler_k.sample_init(i_des=k)
-        # init RFD2 features cache + extra
-        extra_tXd_names = getattr(conf, 'extra_tXd', [])
+        # init RFD2 features cache + extra — use the SAMPLER's _conf, not the
+        # top-level conf, because the sampler composes extra Hydra defaults and
+        # populates extra_tXd_names there. Using top-level conf yields an empty
+        # list and KeyError: 'radius_of_gyration_v2' inside sample_step.
+        # Matches run_inference.py:714 exactly.
+        extra_tXd_names = getattr(sampler_k._conf, 'extra_tXd', [])
         features_cache = rfd_features.init_tXd_inference(
-            indep, extra_tXd_names, conf.extra_tXd_params, conf.inference.conditions)
+            indep, extra_tXd_names,
+            sampler_k._conf.extra_tXd_params,
+            sampler_k._conf.inference.conditions)
         states.append({
             "indep": indep, "contig_map": contig_map, "atomizer": atomizer,
             "t_step_input": t_step_input, "features_cache": features_cache,
