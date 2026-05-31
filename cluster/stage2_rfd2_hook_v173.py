@@ -106,30 +106,82 @@ def build_conf(motif_pdb: str, ligand: str, contigs: str, contig_atoms: str,
 
 # --- Extract atoms from (indep, px0, seq_t) for E_cat scoring --------------
 
-def indep_to_atom_dicts(indep, xyz_curr, seq_curr, cofactor_atoms_world):
+def indep_to_atom_dicts(indep, xyz_curr, seq_curr, contig_map, cofactor_atoms_world=None,
+                          debug_label=None):
     """Convert (xyz, seq) at a single time step into E_cat-compatible dicts.
 
-    xyz_curr: (L, n_atoms, 3) tensor — usually px0 or x_t
+    Uses RFD2's own aa_model.write_traj to produce a PDB stream (so atom naming,
+    residue naming, and HETATM/ATOM partitioning matches the format E_cat scoring
+    expects). Then parses the PDB stream into atom dicts.
+
+    xyz_curr: (L, NTOTAL, 3) or (1, L, NTOTAL, 3) tensor — typically px0
     seq_curr: (L, NAATOKENS) one-hot or (L,) int tensor
-    cofactor_atoms_world: list of HETATM dicts from the original motif.pdb,
-                           untouched (cofactor is rigid).
+    contig_map: needed for ligand_names argument to write_traj.
+    cofactor_atoms_world: legacy fallback; ignored when write_traj succeeds.
     """
-    if xyz_curr.dim() == 4:   # batch dim
-        xyz_curr = xyz_curr[0]
-    if seq_curr.dim() == 2:   # one-hot -> argmax
+    # batch dim handling: write_traj expects (n_frames, L, NTOTAL, 3)
+    if xyz_curr.dim() == 3:
+        xyz_curr = xyz_curr[None]
+    if seq_curr.dim() == 2:
         seq_idx = seq_curr.argmax(-1)
     else:
-        seq_idx = seq_curr
-    seq_np = seq_idx.detach().cpu().numpy()
-    xyz_np = xyz_curr.detach().cpu().numpy()
-    is_sm = indep.is_sm.detach().cpu().numpy()
+        seq_idx = seq_curr.long() if seq_curr.dtype != torch.long else seq_curr
 
+    try:
+        chain_Ls = rf2aa.util.Ls_from_same_chain_2d(indep.same_chain)
+        pdb_lines = aa_model.write_traj(
+            None,                       # None path -> return list of lines
+            xyz_curr,
+            seq_idx,
+            indep.bond_feats,
+            ligand_name_arr=contig_map.ligand_names if contig_map is not None else None,
+            chain_Ls=chain_Ls,
+            idx_pdb=indep.idx,
+        )
+    except Exception as e:
+        print(f"WARN indep_to_atom_dicts: write_traj failed ({type(e).__name__}: {e}); "
+              f"falling back to manual extraction", flush=True)
+        return _fallback_atom_dicts(indep, xyz_curr[0] if xyz_curr.dim() == 4 else xyz_curr,
+                                     seq_idx, cofactor_atoms_world or [])
+
+    atoms = []
+    for line in pdb_lines:
+        if not isinstance(line, str): continue
+        rec = line[:6].strip()
+        if rec not in ("ATOM", "HETATM"): continue
+        try:
+            name = line[12:16].strip()
+            el_raw = line[76:78].strip().upper() if len(line) >= 78 else ""
+            el = el_raw or "".join(c for c in name if c.isalpha())[:2].upper()
+            atoms.append({
+                "record": rec, "name": name, "element": el,
+                "resname": line[17:20].strip(), "chain": line[21].strip(),
+                "resseq": int(line[22:26]),
+                "x": float(line[30:38]), "y": float(line[38:46]), "z": float(line[46:54]),
+            })
+        except (ValueError, IndexError):
+            continue
+
+    if debug_label is not None:
+        n_atom = sum(1 for a in atoms if a["record"] == "ATOM")
+        n_het  = sum(1 for a in atoms if a["record"] == "HETATM")
+        n_res  = len({(a["chain"], a["resseq"]) for a in atoms if a["record"] == "ATOM"})
+        print(f"DEBUG[{debug_label}]: n_ATOM={n_atom} ({n_res} residues) n_HETATM={n_het}",
+              flush=True)
+    return atoms
+
+
+def _fallback_atom_dicts(indep, xyz_2d, seq_idx, cofactor_atoms_world):
+    """Last-resort fallback if aa_model.write_traj fails (shouldn't normally happen)."""
+    seq_np = seq_idx.detach().cpu().numpy()
+    xyz_np = xyz_2d.detach().cpu().numpy() if hasattr(xyz_2d, 'detach') else np.asarray(xyz_2d)
+    is_sm = indep.is_sm.detach().cpu().numpy()
     out = []
     for i in range(xyz_np.shape[0]):
-        if is_sm[i]: continue                # cofactor / ligand → use world version below
-        aa = int(seq_np[i]) if seq_np[i] < 20 else 0
+        if is_sm[i]: continue
+        si = seq_np[i]
+        aa = int(si) if (not np.isnan(si) if isinstance(si, float) else True) and si < 20 else 0
         rn = aa_idx_to_resname(aa)
-        # Backbone heavies: N=0, CA=1, C=2, O=3 (RFD2 convention)
         for j, name in enumerate(["N", "CA", "C", "O"]):
             if j >= xyz_np.shape[1]: break
             p = xyz_np[i, j]
@@ -137,7 +189,6 @@ def indep_to_atom_dicts(indep, xyz_curr, seq_curr, cofactor_atoms_world):
             out.append({"record": "ATOM", "name": name, "element": name[0],
                         "resname": rn, "chain": "A", "resseq": i + 1,
                         "x": float(p[0]), "y": float(p[1]), "z": float(p[2])})
-    # Append cofactor (HETATM) atoms unchanged — they live in WORLD coords already
     out.extend(cofactor_atoms_world)
     return out
 
@@ -249,8 +300,13 @@ def run_in_denoiser_smc(conf, fields, K=4, checkpoint_every=10,
         E_list = []
         for k in range(K):
             st = states[k]
+            # debug label only on the FIRST checkpoint of the FIRST particle to
+            # avoid spam; tells us if atom extraction is producing real data
+            dbg = f"t={int(t)} k={k}" if (it == 0 and k == 0) else None
             atoms = indep_to_atom_dicts(st["indep"], st["px0_stack"][-1],
-                                          st["seq_stack"][-1], cofactor_world)
+                                          st["seq_stack"][-1], st["contig_map"],
+                                          cofactor_atoms_world=cofactor_world,
+                                          debug_label=dbg)
             if tiered_lambdas:
                 E_k = e_cat_fn(atoms, fields, lambdas=lam_dict)
             else:
