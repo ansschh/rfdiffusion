@@ -42,8 +42,8 @@ for VARIANT in real inverted_face flipped_face wrong_hapticity; do
     cat > "$SBATCH_FILE" <<EOF
 #!/usr/bin/env bash
 #SBATCH --job-name=smc2_${VARIANT}
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:nvidia_h200:1
+#SBATCH --partition=gpu,beta
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=04:00:00

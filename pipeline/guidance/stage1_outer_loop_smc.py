@@ -264,8 +264,8 @@ _DEFAULT_RFD2_TEMPLATE = """#!/usr/bin/env bash
 # $RFD2HOME, MKL/DGL env vars, sandbox at rf_diffusion/exec/...sandbox relative
 # to $RFD2).
 #SBATCH --job-name=smc_w{wave}_p{particle}
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:nvidia_h200:1
+#SBATCH --partition=gpu,beta,dgxlo
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=02:00:00
