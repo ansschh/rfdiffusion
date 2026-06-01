@@ -124,6 +124,37 @@ def _eigh_numpy(H):
     return vals, vecs
 
 
+_METALS = {"IR","ZN","RH","RU","FE","MN","CU","CO","NI","PD","PT","MO","W","OS","V","CR","MG","CA","NA","K","AL"}
+
+
+def _find_metal_world(atoms):
+    """Return (x,y,z) world coords of the first cofactor metal HETATM (not ORI)."""
+    for a in atoms:
+        if a.get("record") != "HETATM": continue
+        if a.get("resname") in ("ORI", "HOH"): continue
+        if a.get("element") in _METALS:
+            return (a["x"], a["y"], a["z"])
+    return None
+
+
+def _auto_origin(atoms, fields, frame_tolerance_A: float = 1.0):
+    """If the design's metal HETATM is far from fields.origin (RFD2 save_outputs
+    recenters), return the metal's world coords. Else return fields.origin.
+
+    This lets V_preorg work on both:
+      - In-loop x_hat_0 atoms (RFD2 internal coords, matches fields.origin)
+      - Saved RFD2 design PDBs (recentered; different world coords)
+    """
+    metal = _find_metal_world(atoms)
+    if metal is None:
+        return tuple(fields.origin), False, None
+    import math
+    d = math.sqrt(sum((metal[k]-fields.origin[k])**2 for k in range(3)))
+    if d > frame_tolerance_A:
+        return metal, True, round(d, 3)
+    return tuple(fields.origin), False, round(d, 3)
+
+
 def e_v_preorg(atoms, fields, *,
                cutoff_A: float = 15.0,
                gamma: float = 1.0,
@@ -163,11 +194,19 @@ def e_v_preorg(atoms, fields, *,
             return 0.0, {"n_CA": N, "note": "too few CAs for ANM"}
         return 0.0
 
-    # Identify active-site CAs (within radius of metal in local frame)
+    # Auto-detect actual metal world coords (saved RFD2 PDBs are recentered;
+    # in-loop atoms match A_cat frame). Distance from CA to metal computed
+    # in WORLD coords using the local metal position, not fields.to_local()
+    # which would use the (potentially stale) saved A_cat origin.
+    origin_world, was_shifted, dist_shift = _auto_origin(atoms, fields)
+
+    # Identify active-site CAs (within radius of metal in WORLD frame)
     active_idx = []
     for i, ca in enumerate(cas):
-        pl = fields.to_local(ca["world"])
-        d = math.sqrt(pl[0]*pl[0] + pl[1]*pl[1] + pl[2]*pl[2])
+        dx = ca["world"][0] - origin_world[0]
+        dy = ca["world"][1] - origin_world[1]
+        dz = ca["world"][2] - origin_world[2]
+        d = math.sqrt(dx*dx + dy*dy + dz*dz)
         if d <= active_site_radius_A:
             active_idx.append(i)
     if not active_idx:
@@ -242,6 +281,9 @@ def e_v_preorg(atoms, fields, *,
             "method": "ANM (Anisotropic Network Model)",
             "force_constant_gamma": gamma,
             "cutoff_A": cutoff_A,
+            "frame_origin_used_world": origin_world,
+            "frame_was_auto_shifted": was_shifted,
+            "frame_shift_distance_A": dist_shift,
             "top_flexible_residues": sorted(per_residue, key=lambda x: -x["msd"])[:5],
         }
     return E
