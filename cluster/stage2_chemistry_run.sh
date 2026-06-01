@@ -35,7 +35,7 @@ JIDS=()
 for VARIANT in real inverted_face flipped_face wrong_hapticity; do
     A="$DMG_DIR/$VARIANT.json"
     [ "$VARIANT" = "real" ] && A="$ACAT"
-    OUT="$SCRATCH/RFdiffusion2/smc2/${TARGET}_${VARIANT}_K${K}_L${LAM}_${MODE}"
+    OUT="$SCRATCH/RFdiffusion2/smc2/${TARGET}_${VARIANT}_K${K}_L${LAM}_${MODE}${OUT_SUFFIX}"
     mkdir -p "$OUT"
 
     SBATCH_FILE="$OUT/submit.sbatch"
@@ -93,7 +93,7 @@ echo "# all variants complete"
 echo ""
 echo "=== CROSS-EVALUATION: all variants scored under REAL A_cat ==="
 for VARIANT in real inverted_face flipped_face wrong_hapticity; do
-    OUT="$SCRATCH/RFdiffusion2/smc2/${TARGET}_${VARIANT}_K${K}_L${LAM}_${MODE}"
+    OUT="$SCRATCH/RFdiffusion2/smc2/${TARGET}_${VARIANT}_K${K}_L${LAM}_${MODE}${OUT_SUFFIX}"
     echo ""
     echo "--- variant: $VARIANT ---"
     python3 "$REPO/pipeline/v_chem.py" "$OUT" 2>&1 | tail -8
