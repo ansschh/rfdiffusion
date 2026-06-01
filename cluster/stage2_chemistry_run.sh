@@ -69,6 +69,9 @@ module load apptainer/1.3.3-gcc-13.2.0-i5n6b74 2>/dev/null || module load apptai
 cd "$RFD2"
 export PYTHONPATH="\$PWD:$REPO/pipeline"
 IMG="rf_diffusion/exec/bakerlab_rf_diffusion_aa_sandbox"
+# Sandbox integrity guard (recurring infra failure: lz4 sandbox dir gets wiped)
+[ -e "\$IMG/bin/sh" ] || { echo "FATAL: SANDBOX \$RFD2/\$IMG missing/corrupt - re-extract"; exit 1; }
+[ -x "\$IMG/usr/bin/python" ] || { echo "FATAL: SANDBOX has no /usr/bin/python - re-extract"; exit 1; }
 
 apptainer exec --nv -B /resnick --home "$SCRATCH/rfd2home" \\
   --env DGLBACKEND=pytorch --env MKL_THREADING_LAYER=GNU --env MKL_SERVICE_FORCE_INTEL=1 \\
