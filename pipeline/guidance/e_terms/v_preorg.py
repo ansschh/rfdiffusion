@@ -128,14 +128,29 @@ def _power_iteration_inverse(H, n_modes=10, n_iter=80, tol=1e-7, exclude_n=6):
     raise NotImplementedError("No-numpy fallback not implemented; numpy required")
 
 
-def _eigh_numpy(H):
-    """Use numpy.linalg.eigh if available. Returns (vals_asc, vecs_cols)."""
+def _eigh_numpy(H, k_lowest=None):
+    """Eigendecomposition. If k_lowest is set, use scipy.sparse.linalg.eigsh
+    (ARPACK) to compute only the lowest k eigenvalues — much faster when only
+    a few slow modes are needed. Else use np.linalg.eigh (full decomposition).
+    """
     import numpy as np
     A = np.asarray(H, dtype=float)
-    # Ensure exact symmetry (floating-point asymmetry can break eigh)
+    # Ensure exact symmetry
     A = 0.5 * (A + A.T)
-    vals, vecs = np.linalg.eigh(A)   # already sorted ascending
-    return vals, vecs
+    if k_lowest is None:
+        return np.linalg.eigh(A)
+    try:
+        from scipy.sparse.linalg import eigsh
+        # ARPACK shift-invert: find k eigenvalues closest to sigma=0
+        # n_slow_modes + 6 zero modes = need k_lowest+6 modes total
+        k = min(k_lowest + 6, A.shape[0] - 1)
+        vals, vecs = eigsh(A, k=k, sigma=0.0, which='LM')
+        # Sort ascending
+        order = np.argsort(vals)
+        return vals[order], vecs[:, order]
+    except Exception:
+        # Fall back to dense eigh
+        return np.linalg.eigh(A)
 
 
 _METALS = {"IR","ZN","RH","RU","FE","MN","CU","CO","NI","PD","PT","MO","W","OS","V","CR","MG","CA","NA","K","AL"}
@@ -233,9 +248,12 @@ def e_v_preorg(atoms, fields, *,
     ca_coords = [c["world"] for c in cas]
     H = _build_anm_hessian(ca_coords, cutoff_A=cutoff_A, gamma=gamma)
 
-    # Diagonalize via numpy
+    # Diagonalize — prefer scipy.sparse.linalg.eigsh for lowest k modes only.
+    # Full eigh on 3N=480 is ~50ms with optimized BLAS but can be minutes with
+    # an under-optimized numpy. eigsh ARPACK only computes the lowest k+6 modes
+    # → orders of magnitude faster on slow Python installs.
     try:
-        vals, vecs = _eigh_numpy(H)
+        vals, vecs = _eigh_numpy(H, k_lowest=n_slow_modes)
     except ImportError:
         if return_breakdown:
             return 0.0, {"n_CA": N, "note": "numpy unavailable; skipped ANM"}
