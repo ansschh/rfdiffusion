@@ -11,18 +11,28 @@ set -uo pipefail
 TARGET="${1:?target required, e.g. 3ZP9}"
 K="${2:-4}"
 LAM="${3:-1.0}"
-MODE="${4:-tiered}"   # tiered | linear
+MODE="${4:-tiered}"           # tiered | linear  (lambda schedule)
+ACAT_MODE="${5:-oracle}"      # oracle | chem    (A_cat source)
 
 RFD2="${RFD2_DIR:-/resnick/scratch/atiwari2/RFdiffusion2}"
 REPO="${REPO_DIR:-/resnick/scratch/atiwari2/rfdiffusion}"
 SCRATCH="${SCRATCH_DIR:-/resnick/scratch/atiwari2}"
 
 COMPILED="$REPO/pipeline/compiled/$TARGET"
-ACAT="$COMPILED/A_cat.json"
-DMG_DIR="$COMPILED/damaged"
-[ -f "$ACAT" ] || python3 "$REPO/pipeline/retrieval/instantiate_acat.py" "$COMPILED" --mode oracle
+if [ "$ACAT_MODE" = "chem" ]; then
+    ACAT="$COMPILED/A_cat_chem.json"
+    DMG_DIR="$COMPILED/damaged_chem"
+    OUT_SUFFIX="_chem"
+    [ -f "$ACAT" ] || python3 "$REPO/pipeline/retrieval/instantiate_acat.py" "$COMPILED" --mode chem
+else
+    ACAT="$COMPILED/A_cat.json"
+    DMG_DIR="$COMPILED/damaged"
+    OUT_SUFFIX=""
+    [ -f "$ACAT" ] || python3 "$REPO/pipeline/retrieval/instantiate_acat.py" "$COMPILED" --mode oracle
+fi
+echo "# ACAT_MODE=$ACAT_MODE  source=$ACAT  out_suffix='$OUT_SUFFIX'"
 
-# Generate damaged A_cat variants
+# Generate damaged A_cat variants (per-mode dir, doesn't overwrite oracle)
 python3 "$REPO/pipeline/guidance/damaged_controls.py" "$ACAT" --out-dir "$DMG_DIR"
 
 CONTIG="$(python3 -c "import json;print(json.load(open('$COMPILED/manifest.json'))['contig'])")"
