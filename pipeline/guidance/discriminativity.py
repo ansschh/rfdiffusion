@@ -37,7 +37,7 @@ def main():
     print(f"# lambdas = {lambdas}")
     print()
     cols = ("path", "contact", "avoid", "anchor", "seq_chem", "site",
-            "face", "coord_zones", "elec_field", "dynamics")
+            "face", "coord_zones", "elec_field", "v_preorg")
     hdr = "{:<22}".format("variant") + "".join("{:>9}".format("E_" + c) for c in cols) + "  {:>10}".format("E_cat")
     print(hdr)
     print("-" * len(hdr))

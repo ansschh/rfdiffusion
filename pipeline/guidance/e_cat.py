@@ -36,6 +36,7 @@ from guidance.e_terms.face        import e_face
 from guidance.e_terms.coord_zones import e_coord_zones
 from guidance.e_terms.elec_field  import e_elec_field
 from guidance.e_terms.dynamics    import e_dynamics_proxy
+from guidance.e_terms.v_preorg    import e_v_preorg
 
 
 DEFAULT_LAMBDAS = {
@@ -48,7 +49,8 @@ DEFAULT_LAMBDAS = {
     "face":         1.0,
     "coord_zones":  1.0,
     "elec_field":   1.0,    # electrostatic preorganization (PI named: missing channel)
-    "dynamics":     0.5,    # cheap proxy; lower weight until V_preorg lands
+    "dynamics":     0.0,    # cheap proxy DEPRECATED in favor of v_preorg below
+    "v_preorg":     1.0,    # ANM-based active-site flexibility (PI directive 2026-05-31)
 }
 
 # Per-noise-level annealed schedules (the PI's tiered guidance idea).
@@ -58,13 +60,13 @@ DEFAULT_LAMBDAS = {
 # FINE = + anchor + seq_chem + site (residue-frame chemistry)
 SCHEDULE_COARSE = {"path": 1.0, "contact": 0.0, "avoid": 0.5, "anchor": 0.0,
                    "seq_chem": 0.0, "site": 0.0, "face": 1.0, "coord_zones": 0.0,
-                   "elec_field": 0.0, "dynamics": 0.0}
+                   "elec_field": 0.0, "dynamics": 0.0, "v_preorg": 0.0}
 SCHEDULE_MID    = {"path": 1.0, "contact": 1.0, "avoid": 1.0, "anchor": 0.0,
                    "seq_chem": 0.0, "site": 0.0, "face": 1.0, "coord_zones": 1.0,
-                   "elec_field": 0.5, "dynamics": 0.0}
+                   "elec_field": 0.5, "dynamics": 0.0, "v_preorg": 0.5}
 SCHEDULE_FINE   = {"path": 1.0, "contact": 1.0, "avoid": 1.0, "anchor": 1.0,
                    "seq_chem": 1.0, "site": 1.0, "face": 1.0, "coord_zones": 1.0,
-                   "elec_field": 1.0, "dynamics": 0.5}
+                   "elec_field": 1.0, "dynamics": 0.0, "v_preorg": 1.0}
 
 
 def e_cat(atoms, fields: ACatFields, *,
@@ -86,6 +88,7 @@ def e_cat(atoms, fields: ACatFields, *,
     if L.get("coord_zones", 0) != 0.0: terms["coord_zones"] = e_coord_zones(atoms, fields)
     if L.get("elec_field",  0) != 0.0: terms["elec_field"]  = e_elec_field(atoms, fields)
     if L.get("dynamics",    0) != 0.0: terms["dynamics"]    = e_dynamics_proxy(atoms, fields)
+    if L.get("v_preorg",    0) != 0.0: terms["v_preorg"]    = e_v_preorg(atoms, fields)
     E = sum(L.get(k, 1.0) * v for k, v in terms.items())
     if return_breakdown:
         return E, {"lambdas": L, "terms": {k: round(v, 4) for k, v in terms.items()},
