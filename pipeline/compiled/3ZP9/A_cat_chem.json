@@ -1,0 +1,356 @@
+{
+  "target": "3ZP9",
+  "frame": {
+    "origin_world": [
+      20.046,
+      8.428,
+      11.734
+    ],
+    "R_world_to_local": [
+      [
+        -0.820499,
+        -0.570838,
+        -0.030412
+      ],
+      [
+        -0.440525,
+        0.665304,
+        -0.602751
+      ],
+      [
+        0.364306,
+        -0.481159,
+        -0.79735
+      ]
+    ],
+    "axes_note": "rows of R = local axes expressed in world frame; v_local = R @ (v_world - origin)"
+  },
+  "channels": {
+    "A_steric": [
+      {
+        "name": "IR",
+        "pos_local": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "r": 2.4
+      },
+      {
+        "name": "N3",
+        "pos_local": [
+          1.792,
+          1.291,
+          -0.323
+        ],
+        "r": 1.95
+      },
+      {
+        "name": "N21",
+        "pos_local": [
+          1.714,
+          -1.291,
+          -0.319
+        ],
+        "r": 1.95
+      },
+      {
+        "name": "C1",
+        "pos_local": [
+          -0.222,
+          0.451,
+          -2.065
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C9",
+        "pos_local": [
+          -0.644,
+          -0.927,
+          -1.812
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C7",
+        "pos_local": [
+          -1.786,
+          -0.778,
+          -0.894
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C5",
+        "pos_local": [
+          -1.997,
+          0.648,
+          -0.642
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C3",
+        "pos_local": [
+          -1.022,
+          1.416,
+          -1.37
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "H1",
+        "pos_local": [
+          -0.0,
+          0.0,
+          1.6
+        ],
+        "r": 1.4
+      }
+    ],
+    "A_contact": [
+      {
+        "type": "hydrophobic",
+        "mu_local": [
+          -3.37,
+          0.481,
+          -4.031
+        ],
+        "Sigma_diag": [
+          1.5,
+          1.5,
+          1.5
+        ],
+        "w": 1.0,
+        "source_rule": "Cp-ring face: 5 C at 2.16 A (spread 0.09)"
+      },
+      {
+        "type": "polar",
+        "mu_local": [
+          4.2,
+          3.026,
+          -0.757
+        ],
+        "Sigma_diag": [
+          1.5,
+          1.5,
+          1.5
+        ],
+        "w": 0.7,
+        "source_rule": "polar partner for N donor N3"
+      },
+      {
+        "type": "polar",
+        "mu_local": [
+          4.084,
+          -3.076,
+          -0.76
+        ],
+        "Sigma_diag": [
+          1.5,
+          1.5,
+          1.5
+        ],
+        "w": 0.7,
+        "source_rule": "polar partner for N donor N21"
+      }
+    ],
+    "A_path": {
+      "apex_local": [
+        -0.0,
+        0.0,
+        1.6
+      ],
+      "axis_local": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "half_angle_deg": 30,
+      "extent_A": 5.5,
+      "content_type": "substrate_reactive_atom",
+      "expected_M_substrate_A": [
+        2.5,
+        3.5
+      ]
+    },
+    "A_anchor": [
+      {
+        "type": "dative-supramolecular",
+        "carried": false,
+        "status": "diagnostic (Rev1 \u2014 de novo need not reuse)"
+      }
+    ],
+    "A_TS": [
+      {
+        "component": "substrate_reactive_atom",
+        "pos_local": [
+          0.0,
+          0.0,
+          3.0
+        ],
+        "sigma_A": 0.7,
+        "confidence": "low",
+        "note": "transferred g-double-dagger (LOW confidence: GPT-5.5 iridicycle Chen/Xiao 2015 vs Claude Noyori-Ikariya Handgraaf/Meijer 2007); placement deferred to a flagged docking step"
+      }
+    ],
+    "A_stereo": {
+      "v_stereo_local": [
+        -0.9995,
+        0.0302,
+        0.0
+      ],
+      "bias_strength": 0.3,
+      "source_rule": "(N1->N2) x z (chiral N,N donor face asymmetry); applies inside substrate cone only"
+    },
+    "A_elec": [
+      {
+        "type": "charged_acid",
+        "mu_local": [
+          -0.0,
+          0.0,
+          5.6
+        ],
+        "Sigma_diag": [
+          2.0,
+          2.0,
+          2.0
+        ],
+        "w": 0.5,
+        "source_rule": "ATH cationic-TS stabilization: anionic residue (Asp/Glu) expected ~4 A beyond hydride along substrate approach axis"
+      }
+    ],
+    "A_face": {
+      "reactive_axis_local": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "packing_axis_local": [
+        -0.0,
+        -0.0,
+        -1.0
+      ],
+      "cofactor_body_centroid_z": -1.061,
+      "asymmetry_ok": true,
+      "note": "+z = reactive (substrate approach); -z = packing (cofactor body). asymmetry_ok=true means cofactor heavies sit on packing side as expected."
+    },
+    "A_coord_zones": [
+      {
+        "center_local": [
+          1.792,
+          1.291,
+          -0.323
+        ],
+        "radius_A": 1.0,
+        "allowed_residues": null,
+        "allowed_donor_atoms": null,
+        "source": "cofactor_N_donor_N3"
+      },
+      {
+        "center_local": [
+          1.714,
+          -1.291,
+          -0.319
+        ],
+        "radius_A": 1.0,
+        "allowed_residues": null,
+        "allowed_donor_atoms": null,
+        "source": "cofactor_N_donor_N21"
+      }
+    ]
+  },
+  "uncertainty": {
+    "A_TS": "low (transferred g_dd analog)",
+    "A_anchor": "draft chem rule",
+    "A_stereo": "draft chem rule",
+    "A_elec": "draft chem rule",
+    "A_dynamics": "missing",
+    "A_solvent": "missing"
+  },
+  "cofactor_atoms_local": [
+    {
+      "name": "IR",
+      "element": "IR",
+      "pos_local": [
+        -0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "N3",
+      "element": "N",
+      "pos_local": [
+        1.792,
+        1.291,
+        -0.323
+      ]
+    },
+    {
+      "name": "N21",
+      "element": "N",
+      "pos_local": [
+        1.714,
+        -1.291,
+        -0.319
+      ]
+    },
+    {
+      "name": "C1",
+      "element": "C",
+      "pos_local": [
+        -0.222,
+        0.451,
+        -2.065
+      ]
+    },
+    {
+      "name": "C9",
+      "element": "C",
+      "pos_local": [
+        -0.644,
+        -0.927,
+        -1.812
+      ]
+    },
+    {
+      "name": "C7",
+      "element": "C",
+      "pos_local": [
+        -1.786,
+        -0.778,
+        -0.894
+      ]
+    },
+    {
+      "name": "C5",
+      "element": "C",
+      "pos_local": [
+        -1.997,
+        0.648,
+        -0.642
+      ]
+    },
+    {
+      "name": "C3",
+      "element": "C",
+      "pos_local": [
+        -1.022,
+        1.416,
+        -1.37
+      ]
+    },
+    {
+      "name": "H1",
+      "element": "H",
+      "pos_local": [
+        -0.0,
+        0.0,
+        1.6
+      ]
+    }
+  ],
+  "mode": "chem"
+}

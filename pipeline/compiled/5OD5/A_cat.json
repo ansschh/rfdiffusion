@@ -1,0 +1,267 @@
+{
+  "target": "5OD5",
+  "frame": {
+    "origin_world": [
+      39.637,
+      28.32,
+      11.074
+    ],
+    "R_world_to_local": [
+      [
+        -0.892809,
+        -0.195021,
+        -0.406029
+      ],
+      [
+        -0.351427,
+        -0.262284,
+        0.898725
+      ],
+      [
+        -0.281765,
+        0.945079,
+        0.165634
+      ]
+    ],
+    "axes_note": "rows of R = local axes expressed in world frame; v_local = R @ (v_world - origin)"
+  },
+  "channels": {
+    "A_steric": [
+      {
+        "name": "IR1",
+        "pos_local": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "r": 2.4
+      },
+      {
+        "name": "C17",
+        "pos_local": [
+          -0.788,
+          -1.135,
+          -1.469
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C18",
+        "pos_local": [
+          0.419,
+          -0.604,
+          -1.877
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C19",
+        "pos_local": [
+          0.313,
+          0.752,
+          -1.858
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C20",
+        "pos_local": [
+          -0.952,
+          1.076,
+          -1.436
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C21",
+        "pos_local": [
+          -1.631,
+          -0.09,
+          -1.198
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "N2",
+        "pos_local": [
+          1.173,
+          1.362,
+          0.919
+        ],
+        "r": 1.95
+      },
+      {
+        "name": "N3",
+        "pos_local": [
+          1.465,
+          -1.362,
+          0.495
+        ],
+        "r": 1.95
+      }
+    ],
+    "A_contact": [
+      {
+        "type": "anchor",
+        "mu_local": [
+          -1.625,
+          -0.866,
+          3.225
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "HIS227C",
+        "min_dist_to_core": 2.21
+      },
+      {
+        "type": "polar",
+        "mu_local": [
+          -5.533,
+          -4.805,
+          1.989
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "THR226C",
+        "min_dist_to_core": 6.33
+      },
+      {
+        "type": "aromatic",
+        "mu_local": [
+          8.13,
+          -5.406,
+          7.482
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "TYR288C",
+        "min_dist_to_core": 8.4
+      }
+    ],
+    "A_path": null,
+    "A_anchor": [
+      {
+        "type": "supramolecular redox-switchable Fe(III)-azotochelin -> CeuE",
+        "carried": false,
+        "status": "diagnostic (Rev1 \u2014 de novo need not reuse)"
+      }
+    ],
+    "A_TS": [
+      {
+        "component": "substrate_reactive_atom",
+        "pos_local": [
+          0.0,
+          0.0,
+          3.0
+        ],
+        "sigma_A": 0.7,
+        "confidence": "low",
+        "note": "transferred g_dd"
+      }
+    ],
+    "A_stereo": null,
+    "A_elec": {
+      "status": "missing",
+      "would_carry": [
+        "cationic_TS",
+        "metal_charge",
+        "dipoles"
+      ]
+    }
+  },
+  "uncertainty": {
+    "A_TS": "low (transferred g_dd analog)",
+    "A_anchor": "diagnostic (not load-bearing)",
+    "A_stereo": "missing",
+    "A_elec": "missing",
+    "A_dynamics": "missing",
+    "A_solvent": "missing"
+  },
+  "cofactor_atoms_local": [
+    {
+      "name": "IR1",
+      "element": "IR",
+      "pos_local": [
+        -0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "C17",
+      "element": "C",
+      "pos_local": [
+        -0.788,
+        -1.135,
+        -1.469
+      ]
+    },
+    {
+      "name": "C18",
+      "element": "C",
+      "pos_local": [
+        0.419,
+        -0.604,
+        -1.877
+      ]
+    },
+    {
+      "name": "C19",
+      "element": "C",
+      "pos_local": [
+        0.313,
+        0.752,
+        -1.858
+      ]
+    },
+    {
+      "name": "C20",
+      "element": "C",
+      "pos_local": [
+        -0.952,
+        1.076,
+        -1.436
+      ]
+    },
+    {
+      "name": "C21",
+      "element": "C",
+      "pos_local": [
+        -1.631,
+        -0.09,
+        -1.198
+      ]
+    },
+    {
+      "name": "N2",
+      "element": "N",
+      "pos_local": [
+        1.173,
+        1.362,
+        0.919
+      ]
+    },
+    {
+      "name": "N3",
+      "element": "N",
+      "pos_local": [
+        1.465,
+        -1.362,
+        0.495
+      ]
+    }
+  ],
+  "mode": "oracle"
+}

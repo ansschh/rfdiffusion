@@ -117,13 +117,12 @@ def derive_a_stereo_chem(cofactor_local):
 
 
 def derive_a_elec_chem(cofactor_local, manifest):
-    """A_elec (DRAFT chemistry rule): for cationic-TS reactions (e.g., asymmetric transfer
-    hydrogenation of imines), expect anionic-residue stabilization near the substrate-cone exit.
-    Only emits when the target's reaction class is known to have a cationic TS.
+    """A_elec (legacy single-Gaussian, kept for backward compat). New code should
+    consume A_elec_field via E_elec_field. This stub still emits the original
+    charged_acid Gaussian so E_contact-style oracle scoring of A_elec doesn't break.
     """
     pdb_id = (manifest.get("pdb_id") or "").upper()
-    # cationic-TS classes; DRAFT lookup, expand as more targets are added.
-    cationic_TS_targets = {"3ZP9", "5OD5"}    # ATH of cyclic imines (cationic iminium TS)
+    cationic_TS_targets = {"3ZP9", "5OD5"}
     if pdb_id not in cationic_TS_targets:
         return []
     h_local = next((c["pos_local"] for c in cofactor_local if c["element"] == "H"), None)
@@ -134,9 +133,109 @@ def derive_a_elec_chem(cofactor_local, manifest):
         "mu_local": [round(h_local[0], 3), round(h_local[1], 3), round(h_local[2] + 4.0, 3)],
         "Sigma_diag": [2.0, 2.0, 2.0],
         "w": 0.5,
-        "source_rule": "ATH cationic-TS stabilization: anionic residue (Asp/Glu) expected ~4 A "
-                       "beyond hydride along substrate approach axis",
+        "source_rule": "ATH cationic-TS stabilization (legacy single-Gaussian; new code uses A_elec_field)",
     }]
+
+
+def derive_a_elec_field_v1(cofactor_local, manifest):
+    """A_elec_field (PI's named missing channel — electrostatic preorganization).
+
+    Builds a TS-dipole + dielectric model for cationic-TS reaction classes. The
+    scorer (e_terms/elec_field.E_elec_field) computes the Coulomb field at the
+    TS center from the protein's formal charges and scores stabilization.
+
+    v1 model (locked with PI 2026-05-31):
+      - TS dipole along the metal->hydride axis (+z in local frame); textbook ATH.
+      - TS center placed past the hydride by ts_offset_A along +z.
+      - epsilon = 4 (protein interior).
+      - Dipole magnitude 5 D (rough; imine iminium TS magnitude in this range).
+
+    Only emits for cationic-TS targets; returns None otherwise.
+    """
+    pdb_id = (manifest.get("pdb_id") or "").upper()
+    cationic_TS_targets = {"3ZP9", "5OD5"}
+    if pdb_id not in cationic_TS_targets:
+        return None
+    h_local = next((c["pos_local"] for c in cofactor_local if c["element"] == "H"), None)
+    if h_local:
+        # TS center: ~2 A past the hydride along +z (the substrate iminium C in ATH)
+        ts_center = [round(h_local[0], 3), round(h_local[1], 3), round(h_local[2] + 2.0, 3)]
+    else:
+        # No hydride atom (e.g., 5OD5 with His-coord open leg): place TS center
+        # 4 A past the metal along +z
+        ts_center = [0.0, 0.0, 4.0]
+    return {
+        "ts_center_local": ts_center,
+        "ts_dipole_direction_local": [0.0, 0.0, 1.0],
+        "ts_dipole_magnitude_D": 5.0,
+        "epsilon_dielectric": 4.0,
+        "max_residue_distance_A": 15.0,
+        "rationale": "cationic TS along metal->hydride axis (ATH default); "
+                     "Coulomb point-charge model; eps=4 interior dielectric",
+        "calibrated_with_PI": "2026-05-31",
+    }
+
+
+def derive_a_dynamics_v1(cofactor_local, manifest):
+    """A_dynamics v1 (CHEAP PROXY — not full MD).
+
+    Real V_preorg requires PyRosetta/OpenMM relaxation + normal modes — that
+    needs sandbox-side dependencies and minutes per design. This v1 channel
+    instead defines a CHEAP proxy: an "active-site backbone tightness" budget
+    that E_dynamics_proxy can score using only the RFD2 output PDB.
+
+    Rules emitted:
+      - active_site_radius_A: residues whose CA is within this radius of the
+        metal are "active-site" residues for the proxy.
+      - max_bb_neighbor_dist_var_A: tolerance for CA-CA neighbor distance
+        variance in the active-site region. Low variance = ordered pocket.
+        High variance = "static sculpture" risk.
+      - required_n_helix_or_sheet_residues: minimum count of canonical
+        secondary-structure residues among active-site residues. Loose
+        connecting loops alone = dynamics-risky.
+
+    These are *honest proxies*, not real dynamics. Marked as such with a
+    `proxy_grade: cheap` field so downstream tools can flag them.
+    """
+    return {
+        "active_site_radius_A": 8.0,
+        "max_bb_neighbor_dist_var_A": 0.6,
+        "min_secondary_structure_residues_in_active_site": 4,
+        "proxy_grade": "cheap",
+        "what_this_isnt": ["full MD", "normal modes", "PB/Generalized-Born",
+                            "explicit-solvent relaxation"],
+        "what_this_is": "RFD2-output-only backbone tightness proxy; flags 'static sculpture' "
+                        "designs where the active-site pocket has irregular backbone geometry",
+        "promotion_path": "replace with full V_preorg (constrained relax + normal modes) "
+                          "post-design; current channel is acceptable for in-denoiser guidance only",
+    }
+
+
+def derive_a_uncertainty(channels_built):
+    """A_uncertainty: explicit per-channel uncertainty/grade markers so downstream
+    tools (and the PI) can see at a glance which channels are calibrated vs draft.
+
+    Returns a dict of channel_name -> grade where grade is one of:
+       "validated"  - tested + PI-calibrated
+       "draft"      - implemented but params textbook-derived, not PI-calibrated
+       "proxy"      - cheap stand-in for a more expensive real measurement
+       "missing"    - placeholder; channel not really populated
+    """
+    grades = {
+        "A_steric":       "validated",
+        "A_path":         "validated",
+        "A_contact":      "validated" if channels_built.get("A_contact_oracle") else "draft",
+        "A_face":         "validated" if channels_built.get("A_face") else "missing",
+        "A_coord_zones":  "validated" if channels_built.get("A_coord_zones") else "missing",
+        "A_stereo":       "draft" if channels_built.get("A_stereo") else "missing",
+        "A_elec":         "draft (legacy single-Gaussian)" if channels_built.get("A_elec_legacy") else "missing",
+        "A_elec_field":   "draft (Coulomb point-charge eps=4; PI-locked 2026-05-31)"
+                            if channels_built.get("A_elec_field") else "missing",
+        "A_dynamics":     "proxy (cheap RFD2-output-only)" if channels_built.get("A_dynamics") else "missing",
+        "A_anchor":       "schema-ready" if channels_built.get("A_anchor_carried") else "diagnostic only",
+        "A_TS":           "low_confidence (transferred g_dd)",
+    }
+    return grades
 
 
 def derive_a_face_axis(cofactor_local):
@@ -355,6 +454,9 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
     # they don't constitute oracle leakage. Available to all downstream E_terms.
     a_face = derive_a_face_axis(cofactor_local)
     a_coord_zones = derive_a_coord_zones(cofactor_local, manifest)
+    # Three additional PI-named channels (electrostatic preorg, dynamics proxy, uncertainty):
+    a_elec_field = derive_a_elec_field_v1(cofactor_local, manifest)
+    a_dynamics = derive_a_dynamics_v1(cofactor_local, manifest)
     if not a_elec_list and mode != "chem":
         a_elec_payload = {"status": "missing", "would_carry": ["cationic_TS", "metal_charge", "dipoles"]}
     else:
@@ -377,6 +479,18 @@ def build_a_cat(target_dir, target_id, mode="oracle"):
             "A_elec": a_elec_payload,
             "A_face": a_face,
             "A_coord_zones": a_coord_zones,
+            "A_elec_field": a_elec_field,
+            "A_dynamics": a_dynamics,
+            "A_uncertainty": derive_a_uncertainty({
+                "A_contact_oracle": (mode == "oracle"),
+                "A_face": bool(a_face),
+                "A_coord_zones": bool(a_coord_zones),
+                "A_stereo": bool(a_stereo),
+                "A_elec_legacy": bool(a_elec_list),
+                "A_elec_field": bool(a_elec_field),
+                "A_dynamics": bool(a_dynamics),
+                "A_anchor_carried": any(a.get("carried") for a in a_anchor),
+            }),
         },
         "uncertainty": {
             "A_TS": "low (transferred g_dd analog)",

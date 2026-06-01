@@ -36,7 +36,8 @@ def main():
     print(f"# protein = {args.pdb}  n_atoms={len(atoms)}")
     print(f"# lambdas = {lambdas}")
     print()
-    cols = ("path", "contact", "avoid", "anchor", "seq_chem", "site", "face", "coord_zones")
+    cols = ("path", "contact", "avoid", "anchor", "seq_chem", "site",
+            "face", "coord_zones", "elec_field", "dynamics")
     hdr = "{:<22}".format("variant") + "".join("{:>9}".format("E_" + c) for c in cols) + "  {:>10}".format("E_cat")
     print(hdr)
     print("-" * len(hdr))

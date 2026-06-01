@@ -1,0 +1,115 @@
+{
+  "target": "3ZP9",
+  "mode": "chem",
+  "protein": "pipeline/pdb/3ZP9.pdb",
+  "lambdas": {
+    "path": 1.0,
+    "contact": 1.0,
+    "avoid": 1.0,
+    "anchor": 1.0,
+    "seq_chem": 1.0,
+    "site": 1.0
+  },
+  "rows": [
+    {
+      "variant": "real",
+      "E_cat": 0.0266,
+      "E_path": 0.0178,
+      "E_contact": -0.0027,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "rotated_path_90",
+      "E_cat": 0.3664,
+      "E_path": 0.3576,
+      "E_contact": -0.0027,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "rotated_path_180",
+      "E_cat": 3.1542,
+      "E_path": 3.1454,
+      "E_contact": -0.0027,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "inverted_face",
+      "E_cat": 3.1484,
+      "E_path": 3.1454,
+      "E_contact": -0.0016,
+      "E_avoid": 0.0046,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "wrong_hapticity",
+      "E_cat": 0.0211,
+      "E_path": 0.0178,
+      "E_contact": -0.0082,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "blocked_open_site",
+      "E_cat": 0.9738,
+      "E_path": 1.2649,
+      "E_contact": -0.0027,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": -0.3,
+      "E_site": 0.0
+    },
+    {
+      "variant": "rotated_contact_90",
+      "E_cat": -0.0608,
+      "E_path": 0.0178,
+      "E_contact": -0.0901,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "shuffled_contact_42",
+      "E_cat": -0.4705,
+      "E_path": 0.0178,
+      "E_contact": -0.4998,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "shuffled_contact_7",
+      "E_cat": -0.0544,
+      "E_path": 0.0178,
+      "E_contact": -0.0837,
+      "E_avoid": 0.0115,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    },
+    {
+      "variant": "null_acat",
+      "E_cat": 0.0,
+      "E_path": 0.0,
+      "E_contact": 0.0,
+      "E_avoid": 0.0,
+      "E_anchor": 0.0,
+      "E_seq_chem": 0.0,
+      "E_site": 0.0
+    }
+  ]
+}

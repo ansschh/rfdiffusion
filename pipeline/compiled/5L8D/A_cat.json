@@ -1,0 +1,249 @@
+{
+  "target": "5L8D",
+  "frame": {
+    "origin_world": [
+      35.393,
+      21.079,
+      20.4
+    ],
+    "R_world_to_local": [
+      [
+        -0.521049,
+        0.052157,
+        0.851932
+      ],
+      [
+        0.667582,
+        0.646835,
+        0.368699
+      ],
+      [
+        -0.531829,
+        0.760844,
+        -0.371852
+      ]
+    ],
+    "axes_note": "rows of R = local axes expressed in world frame; v_local = R @ (v_world - origin)"
+  },
+  "channels": {
+    "A_steric": [
+      {
+        "name": "RU",
+        "pos_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "r": 2.4
+      },
+      {
+        "name": "NAL",
+        "pos_local": [
+          1.165,
+          1.551,
+          0.386
+        ],
+        "r": 1.95
+      },
+      {
+        "name": "NAM",
+        "pos_local": [
+          1.518,
+          -1.551,
+          -0.115
+        ],
+        "r": 1.95
+      },
+      {
+        "name": "OXT",
+        "pos_local": [
+          0.34,
+          0.631,
+          -2.074
+        ],
+        "r": 1.92
+      },
+      {
+        "name": "C",
+        "pos_local": [
+          -1.371,
+          -1.13,
+          -0.515
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "CL",
+        "pos_local": [
+          -1.913,
+          1.605,
+          -0.132
+        ],
+        "r": 2.15
+      },
+      {
+        "name": "O1",
+        "pos_local": [
+          0.0,
+          -0.0,
+          2.1
+        ],
+        "r": 1.92
+      }
+    ],
+    "A_contact": [
+      {
+        "type": "aromatic",
+        "mu_local": [
+          4.96,
+          -0.669,
+          2.586
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "TRP398B",
+        "min_dist_to_core": 4.1
+      },
+      {
+        "type": "aromatic",
+        "mu_local": [
+          4.735,
+          4.859,
+          -1.615
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "TRP100B",
+        "min_dist_to_core": 5.21
+      },
+      {
+        "type": "aromatic",
+        "mu_local": [
+          6.807,
+          -2.162,
+          -2.441
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "TYR402B",
+        "min_dist_to_core": 5.53
+      }
+    ],
+    "A_path": null,
+    "A_anchor": [
+      {
+        "type": "supramolecular bpza-carboxylate -- Arg137 salt bridge",
+        "carried": false,
+        "status": "diagnostic (Rev1 \u2014 de novo need not reuse)"
+      }
+    ],
+    "A_TS": [
+      {
+        "component": "substrate_reactive_atom",
+        "pos_local": [
+          0.0,
+          0.0,
+          3.0
+        ],
+        "sigma_A": 0.7,
+        "confidence": "low",
+        "note": "transferred g_dd"
+      }
+    ],
+    "A_stereo": null,
+    "A_elec": {
+      "status": "missing",
+      "would_carry": [
+        "cationic_TS",
+        "metal_charge",
+        "dipoles"
+      ]
+    }
+  },
+  "uncertainty": {
+    "A_TS": "low (transferred g_dd analog)",
+    "A_anchor": "diagnostic (not load-bearing)",
+    "A_stereo": "missing",
+    "A_elec": "missing",
+    "A_dynamics": "missing",
+    "A_solvent": "missing"
+  },
+  "cofactor_atoms_local": [
+    {
+      "name": "RU",
+      "element": "RU",
+      "pos_local": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "NAL",
+      "element": "N",
+      "pos_local": [
+        1.165,
+        1.551,
+        0.386
+      ]
+    },
+    {
+      "name": "NAM",
+      "element": "N",
+      "pos_local": [
+        1.518,
+        -1.551,
+        -0.115
+      ]
+    },
+    {
+      "name": "OXT",
+      "element": "O",
+      "pos_local": [
+        0.34,
+        0.631,
+        -2.074
+      ]
+    },
+    {
+      "name": "C",
+      "element": "C",
+      "pos_local": [
+        -1.371,
+        -1.13,
+        -0.515
+      ]
+    },
+    {
+      "name": "CL",
+      "element": "CL",
+      "pos_local": [
+        -1.913,
+        1.605,
+        -0.132
+      ]
+    },
+    {
+      "name": "O1",
+      "element": "O",
+      "pos_local": [
+        0.0,
+        -0.0,
+        2.1
+      ]
+    }
+  ],
+  "mode": "oracle"
+}

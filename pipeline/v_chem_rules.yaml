@@ -103,4 +103,3 @@ target_to_template:
   3ZP9__block_open_site: cp_star_ir_iii_ath          # catalytic control (compiler v_rxn)
   3ZP9__remove_hydride: cp_star_ir_iii_ath
   3ZP9__wrong_hapticity: cp_star_ir_iii_ath
-  3ZP9__from_2CCY: cp_star_ir_iii_ath               # heme-transplant scaffold experiment (PI test #3)

@@ -56,8 +56,9 @@ def damage_rotated_path(a_cat, deg=90, axis=(0.0, 1.0, 0.0)):
 
 
 def damage_inverted_face(a_cat):
-    """z -> -z: invert proximal/distal. Affects A_path axis_local and apex_local,
-    A_contact mu_local z, A_steric pos_local z, A_TS pos_local z."""
+    """z -> -z: invert proximal/distal across ALL channels. The 2026-05-31 fix
+    extends to A_face (was missing in original implementation, which led to the
+    inverted_face=0 artifact in oracle Stage 2c) and A_elec_field."""
     new = copy.deepcopy(a_cat)
     ch = new["channels"]
     if ch.get("A_path"):
@@ -73,7 +74,20 @@ def damage_inverted_face(a_cat):
         if "pos_local" in t: t["pos_local"][2] = -t["pos_local"][2]
     for e in (ch.get("A_elec") or []) if isinstance(ch.get("A_elec"), list) else []:
         if "mu_local" in e: e["mu_local"][2] = -e["mu_local"][2]
-    new["_damage"] = "inverted_face_z_flip"
+    # A_face: flip the reactive axis z component
+    if ch.get("A_face"):
+        for k in ("reactive_axis_local", "packing_axis_local"):
+            if k in ch["A_face"]:
+                ch["A_face"][k][2] = -ch["A_face"][k][2]
+    # A_elec_field: flip ts_center z + dipole direction z
+    if ch.get("A_elec_field"):
+        ef = ch["A_elec_field"]
+        if "ts_center_local" in ef: ef["ts_center_local"][2] = -ef["ts_center_local"][2]
+        if "ts_dipole_direction_local" in ef: ef["ts_dipole_direction_local"][2] = -ef["ts_dipole_direction_local"][2]
+    # A_coord_zones: flip z of each zone
+    for z in (ch.get("A_coord_zones") or []):
+        if "center_local" in z: z["center_local"][2] = -z["center_local"][2]
+    new["_damage"] = "inverted_face_z_flip_FULL (2026-05-31)"
     return new
 
 
@@ -168,6 +182,44 @@ def damage_shift_coord_zones(a_cat, shift_A=3.0):
     return new
 
 
+def damage_flip_elec_dipole(a_cat):
+    """Flip the TS dipole direction: reward becomes penalty.
+
+    Effect on E_elec_field: any field that was stabilizing the TS dipole now
+    points opposite to it -> destabilizing. Real charged residues will see
+    their sign of contribution flipped.
+
+    Tests whether E_elec_field is doing real chemistry-direction work."""
+    new = copy.deepcopy(a_cat)
+    ef = new["channels"].get("A_elec_field")
+    if ef and "ts_dipole_direction_local" in ef:
+        d = ef["ts_dipole_direction_local"]
+        ef["ts_dipole_direction_local"] = [-d[0], -d[1], -d[2]]
+    new["_damage"] = "flipped_elec_dipole_direction"
+    return new
+
+
+def damage_remove_elec_field(a_cat):
+    """Strip A_elec_field entirely - E_elec_field returns 0. Tests whether
+    presence of the channel itself produces signal (vs default zero)."""
+    new = copy.deepcopy(a_cat)
+    new["channels"]["A_elec_field"] = None
+    new["_damage"] = "removed_A_elec_field"
+    return new
+
+
+def damage_relax_dynamics_tolerance(a_cat):
+    """Slacken the dynamics proxy tolerances - no design ever flags as a
+    'static sculpture'. Tests whether E_dynamics_proxy is doing real work."""
+    new = copy.deepcopy(a_cat)
+    ad = new["channels"].get("A_dynamics")
+    if ad:
+        ad["max_bb_neighbor_dist_var_A"] = 100.0   # accept anything
+        ad["min_secondary_structure_residues_in_active_site"] = 0
+    new["_damage"] = "relaxed_A_dynamics_tolerances"
+    return new
+
+
 def damage_null_acat(a_cat):
     new = copy.deepcopy(a_cat)
     for k in ("A_steric", "A_contact", "A_path", "A_anchor", "A_TS", "A_stereo", "A_elec"):
@@ -177,18 +229,21 @@ def damage_null_acat(a_cat):
 
 
 ALL_DAMAGES = {
-    "real":               lambda a: a,
-    "rotated_path_90":    lambda a: damage_rotated_path(a, 90),
-    "rotated_path_180":   lambda a: damage_rotated_path(a, 180),
-    "inverted_face":      damage_inverted_face,
-    "wrong_hapticity":    damage_wrong_hapticity,
-    "blocked_open_site":  damage_blocked_open_site,
-    "rotated_contact_90": lambda a: damage_rotated_contact(a, 90),
-    "shuffled_contact_42":lambda a: damage_shuffled_contact(a, 42),
-    "shuffled_contact_7": lambda a: damage_shuffled_contact(a, 7),
-    "flipped_face":       damage_flip_face,
-    "shifted_coord_zones":lambda a: damage_shift_coord_zones(a, 3.0),
-    "null_acat":          damage_null_acat,
+    "real":                  lambda a: a,
+    "rotated_path_90":       lambda a: damage_rotated_path(a, 90),
+    "rotated_path_180":      lambda a: damage_rotated_path(a, 180),
+    "inverted_face":         damage_inverted_face,
+    "wrong_hapticity":       damage_wrong_hapticity,
+    "blocked_open_site":     damage_blocked_open_site,
+    "rotated_contact_90":    lambda a: damage_rotated_contact(a, 90),
+    "shuffled_contact_42":   lambda a: damage_shuffled_contact(a, 42),
+    "shuffled_contact_7":    lambda a: damage_shuffled_contact(a, 7),
+    "flipped_face":          damage_flip_face,
+    "shifted_coord_zones":   lambda a: damage_shift_coord_zones(a, 3.0),
+    "flipped_elec_dipole":   damage_flip_elec_dipole,
+    "removed_elec_field":    damage_remove_elec_field,
+    "relaxed_dynamics":      damage_relax_dynamics_tolerance,
+    "null_acat":             damage_null_acat,
 }
 
 

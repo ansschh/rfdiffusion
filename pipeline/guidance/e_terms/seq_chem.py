@@ -110,6 +110,11 @@ def e_seq_chem(atoms, fields, *,
                hard_base_weight: float = 0.5,
                cone_charge_weight: float = 0.3,
                past_cone_acid_reward: float = 0.3,
+               past_cone_base_penalty: float = 0.3,
+               aromatic_pi_stack_reward: float = 0.4,
+               aromatic_pi_stack_range_A=(3.5, 5.5),
+               charge_charge_repulsion_dist_A: float = 5.0,
+               charge_charge_repulsion_weight: float = 0.2,
                return_per_residue: bool = False):
     """
     Penalize chemically incompatible residue identities near cofactor.
@@ -135,6 +140,9 @@ def e_seq_chem(atoms, fields, *,
     E_pen = 0.0
     E_rew = 0.0
     per = [] if return_per_residue else None
+    # Pre-compute per-residue position (for charge-charge pass) so we can
+    # do the O(N^2) over only charged residues without re-traversing.
+    charged_positions = []   # list of (resname, resseq, chain, pos_local, charge_sign)
     for (chain, resseq, resname), ratoms in by_res.items():
         pl = _residue_pos_local(ratoms, fields)
         if pl is None: continue
@@ -177,6 +185,33 @@ def e_seq_chem(atoms, fields, *,
             local_rew += past_cone_acid_reward
             reasons.append(f"acid {resname} past-cone (cationic TS stab): -{past_cone_acid_reward}")
 
+        # Rule 4 (NEW): cation destabilizer past cone — LYS/ARG just past cone exit on
+        # cationic-TS targets is the opposite of an anion stabilizer. Penalize.
+        if cationic_ts and resname in ("LYS", "ARG") and _is_just_past_cone(pl, fields):
+            local_pen += past_cone_base_penalty
+            reasons.append(f"base {resname} past-cone (cationic TS destab): +{past_cone_base_penalty}")
+
+        # Rule 5 (NEW): pi-stacking aromatic near substrate cone face.
+        # PHE/TYR/TRP at 3.5-5.5 A from the cone-exit centerline (perpendicular)
+        # = potential pi-stacking with iminium / aryl substrate. Reward.
+        if resname in ("PHE", "TYR", "TRP") and fields._path_ok:
+            ap = fields._path_apex_geom
+            ax = fields._path_axis
+            rel = (pl[0]-ap[0], pl[1]-ap[1], pl[2]-ap[2])
+            r_par = rel[0]*ax[0] + rel[1]*ax[1] + rel[2]*ax[2]
+            if (fields._path_r_min - 0.5) <= r_par <= (fields._path_r_max + 1.0):
+                r_perp = math.sqrt(max(0.0, rel[0]*rel[0]+rel[1]*rel[1]+rel[2]*rel[2] - r_par*r_par))
+                lo, hi = aromatic_pi_stack_range_A
+                if lo <= r_perp <= hi:
+                    local_rew += aromatic_pi_stack_reward
+                    reasons.append(f"aromatic {resname} pi-stacking range (r_perp={round(r_perp,2)} A): -{aromatic_pi_stack_reward}")
+
+        # Collect charged residues for the O(N^2) charge-charge pass below
+        if resname in ("LYS", "ARG"):
+            charged_positions.append((resname, resseq, chain, pl, +1))
+        elif resname in ("ASP", "GLU"):
+            charged_positions.append((resname, resseq, chain, pl, -1))
+
         if local_pen or local_rew:
             E_pen += local_pen
             E_rew += local_rew
@@ -188,9 +223,35 @@ def e_seq_chem(atoms, fields, *,
                             "net": round(local_pen - local_rew, 4),
                             "reasons": reasons})
 
-    E = E_pen - E_rew
+    # Rule 6 (NEW): charge-charge like-repulsion near active site.
+    # Two like-charged residues within charge_charge_repulsion_dist_A of each
+    # other and both within 10 A of metal: repulsion penalty (destabilizes
+    # the active-site electrostatics).
+    cc_pairs = 0
+    e_cc = 0.0
+    for i in range(len(charged_positions)):
+        ri = charged_positions[i]
+        d_i_metal = math.sqrt(sum(c*c for c in ri[3]))
+        if d_i_metal > 10.0: continue
+        for j in range(i+1, len(charged_positions)):
+            rj = charged_positions[j]
+            if ri[4] != rj[4]:   # opposite sign — attractive, no penalty
+                continue
+            d_j_metal = math.sqrt(sum(c*c for c in rj[3]))
+            if d_j_metal > 10.0: continue
+            d_ij = math.sqrt(sum((ri[3][k]-rj[3][k])**2 for k in range(3)))
+            if d_ij > charge_charge_repulsion_dist_A: continue
+            # Penalty falls off linearly with distance: closer = worse
+            pen = charge_charge_repulsion_weight * max(0.0, 1.0 - d_ij / charge_charge_repulsion_dist_A)
+            e_cc += pen
+            cc_pairs += 1
+
+    E = E_pen + e_cc - E_rew
     if return_per_residue:
-        return E, {"E_penalty": round(E_pen, 4), "E_reward": round(E_rew, 4),
+        return E, {"E_penalty": round(E_pen, 4),
+                   "E_reward": round(E_rew, 4),
+                   "E_charge_charge_repulsion": round(e_cc, 4),
+                   "n_like_charge_repulsion_pairs": cc_pairs,
                    "metal_class": metal_class, "cationic_ts": cationic_ts,
                    "per_residue": sorted(per, key=lambda x: -abs(x["net"]))[:30]}
     return E

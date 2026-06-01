@@ -1,0 +1,247 @@
+{
+  "target": "3WJC",
+  "frame": {
+    "origin_world": [
+      32.014,
+      -17.103,
+      -25.407
+    ],
+    "R_world_to_local": [
+      [
+        0.950521,
+        -0.092445,
+        -0.296586
+      ],
+      [
+        -0.0,
+        -0.954698,
+        0.297576
+      ],
+      [
+        -0.310659,
+        -0.282852,
+        -0.907461
+      ]
+    ],
+    "axes_note": "rows of R = local axes expressed in world frame; v_local = R @ (v_world - origin)"
+  },
+  "channels": {
+    "A_steric": [
+      {
+        "name": "RH",
+        "pos_local": [
+          0.0,
+          0.0,
+          -0.0
+        ],
+        "r": 2.4
+      },
+      {
+        "name": "C3B",
+        "pos_local": [
+          -0.884,
+          -0.729,
+          -1.944
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C4B",
+        "pos_local": [
+          0.417,
+          -1.075,
+          -1.898
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C5B",
+        "pos_local": [
+          1.177,
+          0.033,
+          -1.848
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C6B",
+        "pos_local": [
+          0.266,
+          1.165,
+          -1.862
+        ],
+        "r": 2.1
+      },
+      {
+        "name": "C7B",
+        "pos_local": [
+          -0.976,
+          0.606,
+          -1.87
+        ],
+        "r": 2.1
+      }
+    ],
+    "A_contact": [
+      {
+        "type": "hydrophobic",
+        "mu_local": [
+          4.314,
+          0.299,
+          -4.825
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "LEU148A",
+        "min_dist_to_core": 3.1
+      },
+      {
+        "type": "hydrophobic",
+        "mu_local": [
+          2.978,
+          -4.484,
+          -4.751
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "LEU158A",
+        "min_dist_to_core": 3.69
+      },
+      {
+        "type": "hydrophobic",
+        "mu_local": [
+          2.646,
+          4.625,
+          -2.154
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "VAL128A",
+        "min_dist_to_core": 3.88
+      },
+      {
+        "type": "hydrophobic",
+        "mu_local": [
+          -3.106,
+          5.154,
+          -1.272
+        ],
+        "Sigma_diag": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "w": 1.0,
+        "source_residue": "LEU100A",
+        "min_dist_to_core": 4.61
+      }
+    ],
+    "A_path": null,
+    "A_anchor": [
+      {
+        "type": "covalent maleimide-Cys96",
+        "carried": false,
+        "status": "diagnostic (Rev1 \u2014 de novo need not reuse)"
+      }
+    ],
+    "A_TS": [
+      {
+        "component": "substrate_reactive_atom",
+        "pos_local": [
+          0.0,
+          0.0,
+          3.0
+        ],
+        "sigma_A": 0.7,
+        "confidence": "low",
+        "note": "transferred g_dd"
+      }
+    ],
+    "A_stereo": null,
+    "A_elec": {
+      "status": "missing",
+      "would_carry": [
+        "cationic_TS",
+        "metal_charge",
+        "dipoles"
+      ]
+    }
+  },
+  "uncertainty": {
+    "A_TS": "low (transferred g_dd analog)",
+    "A_anchor": "diagnostic (not load-bearing)",
+    "A_stereo": "missing",
+    "A_elec": "missing",
+    "A_dynamics": "missing",
+    "A_solvent": "missing"
+  },
+  "cofactor_atoms_local": [
+    {
+      "name": "RH",
+      "element": "RH",
+      "pos_local": [
+        0.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "name": "C3B",
+      "element": "C",
+      "pos_local": [
+        -0.884,
+        -0.729,
+        -1.944
+      ]
+    },
+    {
+      "name": "C4B",
+      "element": "C",
+      "pos_local": [
+        0.417,
+        -1.075,
+        -1.898
+      ]
+    },
+    {
+      "name": "C5B",
+      "element": "C",
+      "pos_local": [
+        1.177,
+        0.033,
+        -1.848
+      ]
+    },
+    {
+      "name": "C6B",
+      "element": "C",
+      "pos_local": [
+        0.266,
+        1.165,
+        -1.862
+      ]
+    },
+    {
+      "name": "C7B",
+      "element": "C",
+      "pos_local": [
+        -0.976,
+        0.606,
+        -1.87
+      ]
+    }
+  ],
+  "mode": "oracle"
+}
